@@ -1,0 +1,14 @@
+.env
+.env.local
+.env.*.local
+
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+plans/
+
+.DS_Store
+docs/PRD/

@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0.0",
+  "feed": {
+    "id": "encoded-id-feed",
+    "generated_at": "2026-07-08T12:00:00.000Z",
+    "expires_at": null,
+    "source_revision": "fixture-encoded-id-2026-07-08T12:00:00.000Z",
+    "default_stale_after_seconds": 86400
+  },
+  "providers": [
+    {
+      "id": "example",
+      "object": "provider",
+      "name": "Example",
+      "homepage": "https://example.test",
+      "api_protocols": ["openai_chat_completions"],
+      "default_base_url": "https://example.test/v1",
+      "authentication": {
+        "type": "none",
+        "header": null,
+        "scheme": null,
+        "credential_hint": null
+      },
+      "signup": {
+        "required": false,
+        "credit_card_required": null
+      },
+      "source_claims": []
+    }
+  ],
+  "models": [
+    {
+      "id": "example:model/with spaces",
+      "object": "model_offering",
+      "display_name": "Example Model With Spaces",
+      "provider": {
+        "id": "example",
+        "name": "Example"
+      },
+      "provider_model_id": "model/with spaces",
+      "canonical_model": null,
+      "description": null,
+      "endpoint": {
+        "protocol": "openai_chat_completions",
+        "base_url": "https://example.test/v1",
+        "model": "model/with spaces"
+      },
+      "capabilities": ["chat"],
+      "limits": {
+        "context_tokens": 8192,
+        "max_output_tokens": 2048
+      },
+      "pricing": {
+        "kind": "unknown",
+        "input_usd_per_1m_tokens": null,
+        "output_usd_per_1m_tokens": null,
+        "currency": "USD",
+        "metering": "tokens",
+        "free": null
+      },
+      "availability": {
+        "status": "available",
+        "last_checked_at": "2026-07-08T12:00:00.000Z",
+        "last_success_at": "2026-07-08T12:00:00.000Z",
+        "stale_after_seconds": 86400
+      },
+      "quality": {
+        "coding_score": null,
+        "reasoning_score": null,
+        "speed_score": null,
+        "recommendation_notes": []
+      },
+      "source_claims": [
+        {
+          "id": "claim_fixture_encoded_id",
+          "source_type": "manual_override",
+          "source_url": null,
+          "collector": "fixture",
+          "observed_at": "2026-07-08T12:00:00.000Z",
+          "field_paths": ["id", "endpoint.model"],
+          "confidence": "medium",
+          "raw_reference": null
+        }
+      ],
+      "policy": {
+        "visibility": "listed",
+        "tags": ["demo"],
+        "recommended_for_agentic_workflows": null
+      }
+    }
+  ],
+  "profiles": [],
+  "notices": []
+}

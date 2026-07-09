@@ -1,0 +1,192 @@
+import type { FeedDocument } from "./schema";
+
+const observedAt = "2026-07-08T12:00:00.000Z";
+
+export const exampleFeed: FeedDocument = {
+  schema_version: "1.0.0",
+  feed: {
+    id: "example-model-feed",
+    generated_at: observedAt,
+    expires_at: "2026-07-08T13:00:00.000Z",
+    source_revision: "fixture-2026-07-08T12:00:00.000Z",
+    default_stale_after_seconds: 86400
+  },
+  providers: [
+    {
+      id: "openrouter",
+      object: "provider",
+      name: "OpenRouter",
+      homepage: "https://openrouter.ai",
+      api_protocols: ["openai_chat_completions"],
+      default_base_url: "https://openrouter.ai/api/v1",
+      authentication: {
+        type: "api_key",
+        header: "Authorization",
+        scheme: "Bearer",
+        credential_hint: "OPENROUTER_API_KEY"
+      },
+      signup: {
+        required: true,
+        credit_card_required: null
+      },
+      source_claims: []
+    },
+    {
+      id: "groq",
+      object: "provider",
+      name: "Groq",
+      homepage: "https://groq.com",
+      api_protocols: ["openai_chat_completions"],
+      default_base_url: "https://api.groq.com/openai/v1",
+      authentication: {
+        type: "api_key",
+        header: "Authorization",
+        scheme: "Bearer",
+        credential_hint: "GROQ_API_KEY"
+      },
+      signup: {
+        required: true,
+        credit_card_required: null
+      },
+      source_claims: []
+    }
+  ],
+  models: [
+    {
+      id: "openrouter:qwen/qwen3-coder:free",
+      object: "model_offering",
+      display_name: "Qwen3 Coder (free)",
+      provider: { id: "openrouter", name: "OpenRouter" },
+      provider_model_id: "qwen/qwen3-coder:free",
+      canonical_model: { id: "qwen/qwen3-coder", confidence: "high" },
+      description: "Fixture free coding-capable OpenRouter offering.",
+      endpoint: {
+        protocol: "openai_chat_completions",
+        base_url: "https://openrouter.ai/api/v1",
+        model: "qwen/qwen3-coder:free"
+      },
+      capabilities: ["chat", "coding", "tool_use", "structured_output", "streaming"],
+      limits: { context_tokens: 262144, max_output_tokens: 65536 },
+      pricing: {
+        kind: "free",
+        input_usd_per_1m_tokens: 0,
+        output_usd_per_1m_tokens: 0,
+        currency: "USD",
+        metering: "tokens",
+        free: {
+          is_currently_free: true,
+          basis: "zero_priced_model",
+          requires_account: true,
+          requires_api_key: true,
+          requires_credit_card: null,
+          quota: null,
+          expires_at: null,
+          last_verified_at: observedAt,
+          confidence: "high"
+        }
+      },
+      availability: {
+        status: "available",
+        last_checked_at: observedAt,
+        last_success_at: observedAt,
+        stale_after_seconds: 86400
+      },
+      quality: {
+        coding_score: null,
+        reasoning_score: null,
+        speed_score: null,
+        recommendation_notes: []
+      },
+      source_claims: [
+        {
+          id: "claim_fixture_openrouter_qwen",
+          source_type: "provider_api",
+          source_url: "https://openrouter.ai/api/v1/models",
+          collector: "fixture",
+          observed_at: observedAt,
+          field_paths: ["pricing", "limits.context_tokens", "capabilities", "availability.status"],
+          confidence: "high",
+          raw_reference: { snapshot_id: "fixture_openrouter", json_pointer: "/data/0" }
+        }
+      ],
+      policy: {
+        visibility: "listed",
+        tags: ["free", "experimental"],
+        recommended_for_agentic_workflows: null
+      }
+    },
+    {
+      id: "groq:openai/gpt-oss-120b",
+      object: "model_offering",
+      display_name: "GPT OSS 120B",
+      provider: { id: "groq", name: "Groq" },
+      provider_model_id: "openai/gpt-oss-120b",
+      canonical_model: { id: "openai/gpt-oss-120b", confidence: "medium" },
+      description: "Fixture Groq OpenAI-compatible coding offering with unknown pricing.",
+      endpoint: {
+        protocol: "openai_chat_completions",
+        base_url: "https://api.groq.com/openai/v1",
+        model: "openai/gpt-oss-120b"
+      },
+      capabilities: ["chat", "coding", "streaming"],
+      limits: { context_tokens: 131072, max_output_tokens: 32768 },
+      pricing: {
+        kind: "unknown",
+        input_usd_per_1m_tokens: null,
+        output_usd_per_1m_tokens: null,
+        currency: "USD",
+        metering: "tokens",
+        free: null
+      },
+      availability: {
+        status: "available",
+        last_checked_at: observedAt,
+        last_success_at: observedAt,
+        stale_after_seconds: 86400
+      },
+      quality: {
+        coding_score: null,
+        reasoning_score: null,
+        speed_score: null,
+        recommendation_notes: []
+      },
+      source_claims: [
+        {
+          id: "claim_fixture_groq_gpt_oss",
+          source_type: "provider_api",
+          source_url: "https://api.groq.com/openai/v1/models",
+          collector: "fixture",
+          observed_at: observedAt,
+          field_paths: ["limits.context_tokens", "capabilities", "availability.status"],
+          confidence: "medium",
+          raw_reference: { snapshot_id: "fixture_groq", json_pointer: "/data/0" }
+        }
+      ],
+      policy: {
+        visibility: "listed",
+        tags: ["coding"],
+        recommended_for_agentic_workflows: null
+      }
+    }
+  ],
+  profiles: [
+    {
+      id: "best-free-coder",
+      object: "profile",
+      display_name: "Best Free Coding Model",
+      description: "Fixture recommendation based on freshness, pricing, capabilities, and context.",
+      selection: {
+        model_offering_id: "openrouter:qwen/qwen3-coder:free",
+        selected_at: observedAt,
+        expires_at: "2026-07-09T12:00:00.000Z"
+      },
+      criteria: {
+        required_capabilities: ["chat", "coding"],
+        preferred_capabilities: ["tool_use", "structured_output"],
+        pricing_kind: ["free", "free_tier"],
+        minimum_context_tokens: 64000
+      }
+    }
+  ],
+  notices: []
+};

@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Provider {
+  id             String          @id
+  name           String
+  homepage       String?
+  defaultBaseUrl String?
+  apiProtocols   String[]
+  authentication Json
+  signup         Json
+  offerings      ModelOffering[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model CanonicalModel {
+  id        String          @id
+  name      String?
+  offerings ModelOffering[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+model ModelOffering {
+  id               String                      @id
+  displayName      String
+  providerId       String
+  provider         Provider                    @relation(fields: [providerId], references: [id])
+  providerModelId  String
+  canonicalModelId String?
+  canonicalModel   CanonicalModel?             @relation(fields: [canonicalModelId], references: [id])
+  description      String?
+  endpoint         Json
+  limits           Json
+  quality          Json
+  policy           Json
+  capabilities     ModelOfferingCapability[]
+  sourceClaims     SourceClaim[]
+  availability     AvailabilityObservation[]
+  pricing          PricingObservation[]
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+}
+
+model Capability {
+  id        String                    @id
+  offerings ModelOfferingCapability[]
+}
+
+model ModelOfferingCapability {
+  modelOfferingId String
+  capabilityId    String
+  modelOffering   ModelOffering @relation(fields: [modelOfferingId], references: [id], onDelete: Cascade)
+  capability      Capability    @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+
+  @@id([modelOfferingId, capabilityId])
+}
+
+model SourceSnapshot {
+  id           String       @id @default(cuid())
+  sourceType   String
+  sourceUrl    String?
+  collector    String
+  observedAt   DateTime
+  body         Json
+  collectorRun CollectorRun @relation(fields: [collectorRunId], references: [id])
+  collectorRunId String
+  claims       SourceClaim[]
+}
+
+model SourceClaim {
+  id              String          @id @default(cuid())
+  sourceType      String
+  sourceUrl       String?
+  collector       String
+  observedAt      DateTime
+  fieldPaths      String[]
+  confidence      String
+  rawReference    Json?
+  modelOffering   ModelOffering?  @relation(fields: [modelOfferingId], references: [id])
+  modelOfferingId String?
+  sourceSnapshot  SourceSnapshot? @relation(fields: [sourceSnapshotId], references: [id])
+  sourceSnapshotId String?
+}
+
+model AvailabilityObservation {
+  id              String        @id @default(cuid())
+  modelOffering   ModelOffering @relation(fields: [modelOfferingId], references: [id], onDelete: Cascade)
+  modelOfferingId String
+  status          String
+  checkedAt       DateTime
+  successAt       DateTime?
+  staleAfterSeconds Int?
+  sourceClaimId   String?
+}
+
+model PricingObservation {
+  id              String        @id @default(cuid())
+  modelOffering   ModelOffering @relation(fields: [modelOfferingId], references: [id], onDelete: Cascade)
+  modelOfferingId String
+  kind            String
+  inputUsdPer1mTokens  Decimal?
+  outputUsdPer1mTokens Decimal?
+  currency        String?
+  metering        String?
+  free            Json?
+  subscription    Json?
+  observedAt      DateTime
+  sourceClaimId   String?
+}
+
+model ManualOverride {
+  id              String   @id @default(cuid())
+  targetFieldPath String
+  value           Json
+  reason          String
+  operator        String
+  sourceUrl       String?
+  visibleInSourceClaims Boolean @default(true)
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+}
+
+model FeedRelease {
+  id            String   @id @default(cuid())
+  status        String
+  generatedAt   DateTime @default(now())
+  sourceRevision String
+  snapshotJson  Json
+  createdAt     DateTime @default(now())
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  name        String
+  keyHash     String   @unique
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+}
+
+model CollectorRun {
+  id          String           @id @default(cuid())
+  collector   String
+  status      String
+  startedAt   DateTime         @default(now())
+  finishedAt  DateTime?
+  errorMessage String?
+  snapshots   SourceSnapshot[]
+}

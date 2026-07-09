@@ -1,0 +1,110 @@
+{
+  "schema_version": "1.0.0",
+  "feed": {
+    "id": "stale-free-feed",
+    "generated_at": "2026-07-08T12:00:00.000Z",
+    "expires_at": "2026-07-08T13:00:00.000Z",
+    "source_revision": "fixture-stale-free-2026-07-08T12:00:00.000Z",
+    "default_stale_after_seconds": 86400
+  },
+  "providers": [
+    {
+      "id": "openrouter",
+      "object": "provider",
+      "name": "OpenRouter",
+      "homepage": "https://openrouter.ai",
+      "api_protocols": ["openai_chat_completions"],
+      "default_base_url": "https://openrouter.ai/api/v1",
+      "authentication": {
+        "type": "api_key",
+        "header": "Authorization",
+        "scheme": "Bearer",
+        "credential_hint": "OPENROUTER_API_KEY"
+      },
+      "signup": {
+        "required": true,
+        "credit_card_required": null
+      },
+      "source_claims": []
+    }
+  ],
+  "models": [
+    {
+      "id": "openrouter:qwen/qwen3-coder:free",
+      "object": "model_offering",
+      "display_name": "Qwen3 Coder (free)",
+      "provider": {
+        "id": "openrouter",
+        "name": "OpenRouter"
+      },
+      "provider_model_id": "qwen/qwen3-coder:free",
+      "canonical_model": {
+        "id": "qwen/qwen3-coder",
+        "confidence": "high"
+      },
+      "description": "Fixture free coding-capable offering with a stale free claim.",
+      "endpoint": {
+        "protocol": "openai_chat_completions",
+        "base_url": "https://openrouter.ai/api/v1",
+        "model": "qwen/qwen3-coder:free"
+      },
+      "capabilities": ["chat", "coding", "tool_use"],
+      "limits": {
+        "context_tokens": 262144,
+        "max_output_tokens": 65536
+      },
+      "pricing": {
+        "kind": "free",
+        "input_usd_per_1m_tokens": 0,
+        "output_usd_per_1m_tokens": 0,
+        "currency": "USD",
+        "metering": "tokens",
+        "free": {
+          "is_currently_free": true,
+          "basis": "zero_priced_model",
+          "requires_account": true,
+          "requires_api_key": true,
+          "requires_credit_card": null,
+          "quota": null,
+          "expires_at": null,
+          "last_verified_at": "2026-06-01T12:00:00.000Z",
+          "confidence": "high"
+        }
+      },
+      "availability": {
+        "status": "available",
+        "last_checked_at": "2026-07-08T12:00:00.000Z",
+        "last_success_at": "2026-07-08T12:00:00.000Z",
+        "stale_after_seconds": 86400
+      },
+      "quality": {
+        "coding_score": null,
+        "reasoning_score": null,
+        "speed_score": null,
+        "recommendation_notes": []
+      },
+      "source_claims": [
+        {
+          "id": "claim_fixture_stale_free",
+          "source_type": "provider_api",
+          "source_url": "https://openrouter.ai/api/v1/models",
+          "collector": "fixture",
+          "observed_at": "2026-07-08T12:00:00.000Z",
+          "field_paths": ["pricing.free.last_verified_at"],
+          "confidence": "high",
+          "raw_reference": {
+            "snapshot_id": "fixture_stale_free",
+            "json_pointer": "/data/0"
+          }
+        }
+      ],
+      "policy": {
+        "visibility": "listed",
+        "tags": ["free"],
+        "recommended_for_agentic_workflows": null
+      }
+    }
+  ],
+  "profiles": [],
+  "notices": []
+}
