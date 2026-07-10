@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ModelOffering, Provider } from "@/feed/schema";
 import { isConfidentlyFree } from "@/feed/classification";
 import { compareForBestFreeCoder } from "@/feed/ranking";
-import { modelSearchHaystack } from "@/feed/filter";
+import { computeFacetCounts, filterExplorerModels, type ExplorerFilters } from "@/feed/facets";
 import { StatusChip } from "../components/StatusChip";
 import {
   availabilityTone,
@@ -139,26 +139,34 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
     return map;
   }, [providers, models]);
 
-  // Facet universes with counts (from all listed models).
-  const providerCounts = useMemo(() => countBy(models, (m) => [m.provider.id]), [models]);
-  const capCounts = useMemo(() => countBy(models, (m) => m.capabilities as string[]), [models]);
-  const pricingCounts = useMemo(() => countBy(models, (m) => [m.pricing.kind]), [models]);
-  const availCounts = useMemo(() => countBy(models, (m) => [m.availability.status]), [models]);
-  const protocolCounts = useMemo(() => countBy(models, (m) => [m.endpoint.protocol]), [models]);
+  // Facet universes (from all listed models) fix which values are shown and
+  // in which order — ordering by live counts would shuffle rows mid-filter.
+  const providerUniverse = useMemo(() => countBy(models, (m) => [m.provider.id]), [models]);
+  const capUniverse = useMemo(() => countBy(models, (m) => m.capabilities as string[]), [models]);
+  const pricingUniverse = useMemo(() => countBy(models, (m) => [m.pricing.kind]), [models]);
+  const availUniverse = useMemo(() => countBy(models, (m) => [m.availability.status]), [models]);
+  const protocolUniverse = useMemo(() => countBy(models, (m) => [m.endpoint.protocol]), [models]);
+
+  const filters = useMemo<ExplorerFilters>(
+    () => ({
+      query,
+      freeOnly,
+      providers: selProviders,
+      capabilities: selCaps,
+      pricing: selPricing,
+      availability: selAvail,
+      protocols: selProtocols,
+      minContext
+    }),
+    [query, freeOnly, selProviders, selCaps, selPricing, selAvail, selProtocols, minContext]
+  );
+
+  // Displayed counts follow the active filters (each facet ignores only its
+  // own selection), so a value's count reads "results if I pick this".
+  const facetCounts = useMemo(() => computeFacetCounts(models, filters, now), [models, filters, now]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = models.filter((m) => {
-      if (freeOnly && !isConfidentlyFree(m, now)) return false;
-      if (selProviders.size && !selProviders.has(m.provider.id)) return false;
-      if (selCaps.size && ![...selCaps].every((c) => (m.capabilities as string[]).includes(c))) return false;
-      if (selPricing.size && !selPricing.has(m.pricing.kind)) return false;
-      if (selAvail.size && !selAvail.has(m.availability.status)) return false;
-      if (selProtocols.size && !selProtocols.has(m.endpoint.protocol)) return false;
-      if (minContext && (m.limits.context_tokens ?? 0) < minContext) return false;
-      if (q && !modelSearchHaystack(m).includes(q)) return false;
-      return true;
-    });
+    const list = filterExplorerModels(models, filters, now);
 
     const byName = (a: ModelOffering, b: ModelOffering) => a.display_name.localeCompare(b.display_name);
     const context = (m: ModelOffering) => m.limits.context_tokens ?? 0;
@@ -171,7 +179,7 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
     else if (sort === "price") sorted.sort((a, b) => price(a) - price(b) || byName(a, b));
     else sorted.sort((a, b) => compareForBestFreeCoder(a, b, now));
     return sorted;
-  }, [models, query, freeOnly, selProviders, selCaps, selPricing, selAvail, selProtocols, minContext, sort, now]);
+  }, [models, filters, sort, now]);
 
   const activeCount =
     selProviders.size +
@@ -279,13 +287,13 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
           />
 
           <Facet title="Provider">
-            {[...providerCounts.entries()]
+            {[...providerUniverse.entries()]
               .sort((a, b) => b[1] - a[1])
-              .map(([id, count]) => (
+              .map(([id]) => (
                 <FacetCheck
                   key={id}
                   label={providerName.get(id) ?? id}
-                  count={count}
+                  count={facetCounts.providers.get(id) ?? 0}
                   checked={selProviders.has(id)}
                   onChange={() => toggle(setSelProviders, id)}
                 />
@@ -293,13 +301,13 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
           </Facet>
 
           <Facet title="Capability" hint="Matches offerings with all selected">
-            {[...capCounts.entries()]
+            {[...capUniverse.entries()]
               .sort((a, b) => b[1] - a[1])
-              .map(([cap, count]) => (
+              .map(([cap]) => (
                 <FacetCheck
                   key={cap}
                   label={capabilityLabel(cap)}
-                  count={count}
+                  count={facetCounts.capabilities.get(cap) ?? 0}
                   checked={selCaps.has(cap)}
                   onChange={() => toggle(setSelCaps, cap)}
                 />
@@ -307,13 +315,13 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
           </Facet>
 
           <Facet title="Pricing">
-            {[...pricingCounts.entries()]
+            {[...pricingUniverse.entries()]
               .sort((a, b) => b[1] - a[1])
-              .map(([kind, count]) => (
+              .map(([kind]) => (
                 <FacetCheck
                   key={kind}
                   label={pricingLabel(kind as never)}
-                  count={count}
+                  count={facetCounts.pricing.get(kind) ?? 0}
                   checked={selPricing.has(kind)}
                   onChange={() => toggle(setSelPricing, kind)}
                 />
@@ -321,13 +329,13 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
           </Facet>
 
           <Facet title="Availability">
-            {[...availCounts.entries()]
+            {[...availUniverse.entries()]
               .sort((a, b) => b[1] - a[1])
-              .map(([status, count]) => (
+              .map(([status]) => (
                 <FacetCheck
                   key={status}
                   label={statusLabel(status)}
-                  count={count}
+                  count={facetCounts.availability.get(status) ?? 0}
                   checked={selAvail.has(status)}
                   onChange={() => toggle(setSelAvail, status)}
                 />
@@ -351,13 +359,13 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
           </Facet>
 
           <Facet title="Protocol">
-            {[...protocolCounts.entries()]
+            {[...protocolUniverse.entries()]
               .sort((a, b) => b[1] - a[1])
-              .map(([protocol, count]) => (
+              .map(([protocol]) => (
                 <FacetCheck
                   key={protocol}
                   label={protocolLabel(protocol)}
-                  count={count}
+                  count={facetCounts.protocols.get(protocol) ?? 0}
                   checked={selProtocols.has(protocol)}
                   onChange={() => toggle(setSelProtocols, protocol)}
                 />
@@ -519,7 +527,7 @@ function FacetCheck({
   onChange: () => void;
 }) {
   return (
-    <label className={styles.check} data-checked={checked}>
+    <label className={styles.check} data-checked={checked} data-zero={!checked && count === 0}>
       <input type="checkbox" checked={checked} onChange={onChange} />
       <span className={styles.checkBox} aria-hidden="true" />
       <span className={styles.checkLabel}>{label}</span>
