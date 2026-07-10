@@ -30,7 +30,7 @@ Example GitHub Actions secrets:
 - `OPENROUTER_API_KEY`
 - `GROQ_API_KEY`
 - `GEMINI_API_KEY`
-- `GITHUB_MODELS_TOKEN`
+- `GH_MODELS_TOKEN` (GitHub Actions rejects secret names starting with `GITHUB_`)
 
 The workflow runs:
 

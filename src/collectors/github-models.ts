@@ -173,7 +173,7 @@ export const githubModelsCollector: Collector = {
       headers: {
         ...(normalizeText(context.env.GITHUB_TOKEN) ? { Authorization: `Bearer ${normalizeText(context.env.GITHUB_TOKEN)}` } : {}),
         ...(normalizeText(context.env.GH_TOKEN) ? { Authorization: `Bearer ${normalizeText(context.env.GH_TOKEN)}` } : {}),
-        ...(normalizeText(context.env.GITHUB_MODELS_TOKEN) ? { Authorization: `Bearer ${normalizeText(context.env.GITHUB_MODELS_TOKEN)}` } : {}),
+        ...(normalizeText(context.env.GH_MODELS_TOKEN) ? { Authorization: `Bearer ${normalizeText(context.env.GH_MODELS_TOKEN)}` } : {}),
         "X-GitHub-Api-Version": "2026-03-10",
         Accept: "application/vnd.github+json"
       }
