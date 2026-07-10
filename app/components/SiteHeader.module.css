@@ -8,6 +8,9 @@
 }
 
 .bar {
+  /* Track the widest page cap (the explorer's) so the bar's edges align with
+     wide content instead of pinching to the 1120px default. */
+  --w-page: 1760px;
   display: flex;
   align-items: center;
   gap: 1rem;

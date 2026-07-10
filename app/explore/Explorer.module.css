@@ -1,4 +1,7 @@
 .wrap {
+  /* Data-dense screen: widen the shared .page cap (1120px) so large windows
+     aren't mostly margin. The header/footer bars share this wider cap. */
+  --w-page: 1760px;
   padding-top: 2.25rem;
   padding-bottom: 2rem;
 }
@@ -231,6 +234,12 @@
 .check[data-checked="true"] .checkLabel {
   color: var(--ink);
   font-weight: 500;
+}
+
+/* Zero results under the other active filters: keep clickable, read as inert. */
+.check[data-zero="true"] .checkLabel,
+.check[data-zero="true"] .checkCount {
+  opacity: 0.45;
 }
 
 /* Toggle */
