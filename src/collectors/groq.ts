@@ -9,7 +9,8 @@ import {
   nowIso,
   normalizeText,
   stripModelPrefix,
-  toPositiveInt
+  toPositiveInt,
+  usdPerMillionTokens
 } from "./shared";
 
 type GroqModel = {
@@ -17,11 +18,19 @@ type GroqModel = {
   name?: string | null;
   description?: string | null;
   context_length?: number | null;
-  max_context_length?: number | null;
+  context_window?: number | null;
   max_completion_tokens?: number | null;
-  supported_parameters?: string[] | null;
-  capabilities?: string[] | null;
-  modalities?: string[] | null;
+  max_output_length?: number | null;
+  supported_features?: string[] | null;
+  input_modalities?: string[] | null;
+  output_modalities?: string[] | null;
+  pricing?: {
+    prompt?: string | null;
+    completion?: string | null;
+    image?: string | null;
+    request?: string | null;
+    input_cache_read?: string | null;
+  } | null;
   [key: string]: unknown;
 };
 
@@ -57,23 +66,26 @@ function normalizeGroqModel(raw: GroqModel, observedAt: string, index: number): 
 
   const name = normalizeText(raw.name) ?? stripModelPrefix(providerModelId);
   const description = normalizeText(raw.description);
-  const contextTokens = toPositiveInt(raw.max_context_length ?? raw.context_length);
-  const maxOutputTokens = toPositiveInt(raw.max_completion_tokens);
+  const contextTokens = toPositiveInt(raw.context_window ?? raw.context_length);
+  const maxOutputTokens = toPositiveInt(raw.max_completion_tokens ?? raw.max_output_length);
   const capabilityCandidates = new Set<string>(["chat", "streaming"]);
+  const supportedFeatures = Array.isArray(raw.supported_features) ? raw.supported_features : [];
+  const inputModalities = Array.isArray(raw.input_modalities) ? raw.input_modalities : [];
+  const outputModalities = Array.isArray(raw.output_modalities) ? raw.output_modalities : [];
 
-  for (const token of [...(raw.capabilities ?? []), ...(raw.supported_parameters ?? []), ...(raw.modalities ?? [])]) {
-    if (token === "tools" || token === "tool_choice" || token === "tool-calling") {
+  for (const token of supportedFeatures) {
+    if (token === "tools" || token === "tool_choice") {
       capabilityCandidates.add("tool_use");
     }
-    if (token === "response_format") {
+    if (token === "json_mode" || token === "structured_outputs" || token === "response_format") {
       capabilityCandidates.add("structured_output");
     }
     if (token === "reasoning") {
       capabilityCandidates.add("reasoning");
     }
-    if (token === "image" || token === "vision") {
-      capabilityCandidates.add("vision");
-    }
+  }
+  if (inputModalities.includes("image") || outputModalities.includes("image")) {
+    capabilityCandidates.add("vision");
   }
 
   if (hasAnyKeyword(providerModelId, ["coder", "code", "coding"]) || hasAnyKeyword(name, ["coder", "code", "coding"]) || hasAnyKeyword(description ?? "", ["coder", "code", "coding"])) {
@@ -84,6 +96,11 @@ function normalizeGroqModel(raw: GroqModel, observedAt: string, index: number): 
   }
 
   const providerModelUrl = `https://api.groq.com/openai/v1/models/${providerModelId}`;
+
+  const promptPrice = usdPerMillionTokens(raw.pricing?.prompt);
+  const completionPrice = usdPerMillionTokens(raw.pricing?.completion);
+  const isFree = promptPrice === 0 && completionPrice === 0;
+  const pricingKind = isFree ? "free" : promptPrice === null || completionPrice === null ? "unknown" : "paid";
 
   return {
     id: `groq:${providerModelId}`,
@@ -110,12 +127,24 @@ function normalizeGroqModel(raw: GroqModel, observedAt: string, index: number): 
       max_output_tokens: maxOutputTokens
     },
     pricing: {
-      kind: "unknown",
-      input_usd_per_1m_tokens: null,
-      output_usd_per_1m_tokens: null,
-      currency: null,
+      kind: pricingKind,
+      input_usd_per_1m_tokens: promptPrice,
+      output_usd_per_1m_tokens: completionPrice,
+      currency: isFree || promptPrice !== null || completionPrice !== null ? "USD" : null,
       metering: "tokens",
-      free: null
+      free: isFree
+        ? {
+            is_currently_free: true,
+            basis: "zero_priced_model",
+            requires_account: true,
+            requires_api_key: true,
+            requires_credit_card: null,
+            quota: null,
+            expires_at: null,
+            last_verified_at: observedAt,
+            confidence: "high"
+          }
+        : null
     },
     availability: {
       status: "available",
@@ -135,7 +164,15 @@ function normalizeGroqModel(raw: GroqModel, observedAt: string, index: number): 
         collector: "groq",
         sourceUrl: "https://api.groq.com/openai/v1/models",
         observedAt,
-        fieldPaths: ["capabilities", "limits.context_tokens", "limits.max_output_tokens", "availability.status"],
+        fieldPaths: [
+          "capabilities",
+          "limits.context_tokens",
+          "limits.max_output_tokens",
+          "pricing.kind",
+          "pricing.input_usd_per_1m_tokens",
+          "pricing.output_usd_per_1m_tokens",
+          "availability.status"
+        ],
         confidence: "medium",
         rawReference: {
           snapshot_id: "groq-live-response",
@@ -164,7 +201,10 @@ export const groqCollector: Collector = {
   id: "groq",
   async collect(context: CollectorContext): Promise<CollectorResult> {
     const observedAt = nowIso(context);
-    const response = await fetchJson<GroqResponse>(context, "https://api.groq.com/openai/v1/models");
+    const apiKey = normalizeText(context.env.GROQ_API_KEY);
+    const response = await fetchJson<GroqResponse>(context, "https://api.groq.com/openai/v1/models", {
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}
+    });
 
     if (!response.ok) {
       return {
@@ -173,7 +213,8 @@ export const groqCollector: Collector = {
         notices: [
           collectorNotice("groq", "collector unavailable", {
             status: response.status,
-            error: response.error
+            error: response.error,
+            has_api_key: Boolean(apiKey)
           })
         ]
       };
