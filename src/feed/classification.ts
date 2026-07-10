@@ -8,6 +8,14 @@ export function hasStaleFreeClaim(model: ModelOffering, now = new Date()): boole
   return now.getTime() - verifiedAt > staleAfter * 1000;
 }
 
+export function isConfidentlyFree(model: ModelOffering, now = new Date()): boolean {
+  return model.pricing.kind === "free" && model.pricing.free?.is_currently_free === true && !hasStaleFreeClaim(model, now);
+}
+
+export function isFixtureSourceRevision(sourceRevision: string): boolean {
+  return sourceRevision.startsWith("fixture-");
+}
+
 export function explainPricing(model: ModelOffering, now = new Date()): string {
   switch (model.pricing.kind) {
     case "free":

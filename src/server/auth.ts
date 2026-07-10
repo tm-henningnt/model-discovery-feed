@@ -1,18 +1,23 @@
 import type { NextRequest } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 
+export const FEED_KEY_COOKIE = "mdf_key";
+
+export function verifyFeedApiKey(provided: string, expectedHash: string): boolean {
+  const actualHash = createHash("sha256").update(provided).digest("hex");
+  const expected = Buffer.from(expectedHash, "hex");
+  const actual = Buffer.from(actualHash, "hex");
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
 export function requireFeedApiKey(request: NextRequest): Response | null {
   const expectedHash = process.env.MODEL_FEED_API_KEY_SHA256;
   if (!expectedHash) return null;
 
-  const provided = extractBearerToken(request);
+  const provided = extractBearerToken(request) ?? request.cookies.get(FEED_KEY_COOKIE)?.value;
   if (!provided) return unauthorized();
 
-  const actualHash = createHash("sha256").update(provided).digest("hex");
-  const expected = Buffer.from(expectedHash, "hex");
-  const actual = Buffer.from(actualHash, "hex");
-
-  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+  if (!verifyFeedApiKey(provided, expectedHash)) {
     return unauthorized();
   }
 

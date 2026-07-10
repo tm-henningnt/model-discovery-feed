@@ -1,0 +1,78 @@
+.wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100dvh - 8rem);
+  padding-block: 3rem;
+}
+
+.card {
+  width: 100%;
+  max-width: 24rem;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.4rem;
+}
+
+.title {
+  margin-top: 0.9rem;
+  font-size: var(--step-1);
+}
+
+.lede {
+  margin-top: 0.1rem;
+  color: var(--muted);
+  font-size: var(--step-sm);
+}
+
+.form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 1.4rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  text-align: left;
+}
+
+.label {
+  font-size: var(--step-sm);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--r-2);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: var(--step-0);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.submit {
+  width: 100%;
+  justify-content: center;
+  margin-top: 0.2rem;
+}
+
+.error {
+  color: var(--bad-ink);
+  font-size: var(--step-sm);
+  text-align: left;
+}

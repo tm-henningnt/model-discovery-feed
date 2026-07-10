@@ -1,0 +1,362 @@
+/* Hero */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: clamp(2rem, 1rem + 4vw, 4.5rem);
+  align-items: start;
+  padding-top: clamp(2.5rem, 1.5rem + 4vw, 4.5rem);
+  padding-bottom: clamp(2.5rem, 1.5rem + 4vw, 4.5rem);
+}
+
+.heroCopy > * {
+  animation: rise 0.55s var(--ease) both;
+}
+
+.heroCopy > *:nth-child(1) {
+  animation-delay: 0.02s;
+}
+.heroCopy > *:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.heroCopy > *:nth-child(3) {
+  animation-delay: 0.14s;
+}
+.heroCopy > *:nth-child(4) {
+  animation-delay: 0.2s;
+}
+.heroCopy > *:nth-child(5) {
+  animation-delay: 0.26s;
+}
+
+.specimen {
+  animation: rise 0.6s var(--ease) 0.2s both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.kicker {
+  margin-bottom: 1.1rem;
+}
+
+.title {
+  font-size: var(--step-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  max-width: 15ch;
+}
+
+.lede {
+  margin-top: 1.25rem;
+  max-width: 52ch;
+  font-size: var(--step-1);
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 2.25rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.stats dt {
+  font-size: var(--step-xs);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stats dd {
+  font-size: var(--step-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.specimenNote {
+  margin-top: 0.75rem;
+  font-size: var(--step-xs);
+  color: var(--muted);
+  text-align: right;
+}
+
+.fixtureNote {
+  font-size: var(--step-xs);
+  color: var(--muted);
+  margin-top: 0.75rem;
+}
+
+/* Scope */
+.scopeSection {
+  margin-top: 1rem;
+}
+
+.scope {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  overflow: hidden;
+}
+
+.scopeCol {
+  padding: 1.75rem clamp(1.25rem, 0.5rem + 2vw, 2.25rem);
+  background: var(--bg);
+}
+
+.scopeNot {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+}
+
+.scopeTitle {
+  font-size: var(--step-1);
+  margin-bottom: 1rem;
+}
+
+.scopeList {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.scopeList li {
+  position: relative;
+  padding-left: 1.5rem;
+  color: var(--ink-2);
+  font-size: var(--step-sm);
+}
+
+.scopeList li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+
+.scopeNot .scopeList li::before {
+  background: transparent;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 999px;
+}
+
+/* Generic section */
+.section {
+  padding-top: clamp(3rem, 2rem + 3vw, 4.5rem);
+}
+
+.sectionHead {
+  max-width: 60ch;
+  margin-bottom: 1.5rem;
+}
+
+.sectionHead h2 {
+  font-size: var(--step-3);
+  letter-spacing: -0.02em;
+}
+
+.sectionHead p {
+  margin-top: 0.6rem;
+  color: var(--muted);
+}
+
+/* Endpoints */
+.endpoints {
+  overflow: hidden;
+}
+
+.endpointRow {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1.1fr) minmax(0, 2fr);
+  gap: 1rem;
+  align-items: baseline;
+  padding: 0.9rem clamp(1rem, 0.5rem + 1.5vw, 1.4rem);
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  transition: background 0.14s var(--ease);
+}
+
+.endpointRow:last-child {
+  border-bottom: 0;
+}
+
+.endpointRow:hover {
+  background: var(--surface-2);
+  text-decoration: none;
+}
+
+.method {
+  font-family: var(--font-mono);
+  font-size: var(--step-xs);
+  font-weight: 600;
+  color: var(--brand-ink);
+  letter-spacing: 0.04em;
+}
+
+.epath {
+  font-size: var(--step-sm);
+  font-weight: 500;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.epurpose {
+  color: var(--muted);
+  font-size: var(--step-sm);
+}
+
+/* Object model */
+.objects {
+  border-top: 1px solid var(--border);
+}
+
+.objectRow {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+  gap: 1.5rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.objectRow dt {
+  font-size: var(--step-1);
+  font-weight: 500;
+  color: var(--brand-ink);
+}
+
+.objectRow dd {
+  color: var(--ink-2);
+  max-width: 60ch;
+}
+
+.freeNote {
+  margin-top: 1.75rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--brand-bg);
+  border: 1px solid var(--brand-border);
+  border-radius: var(--r-3);
+  color: var(--ink-2);
+  font-size: var(--step-sm);
+  max-width: 80ch;
+}
+
+.freeNote strong {
+  color: var(--brand-ink);
+}
+
+/* CLI */
+.cliGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.capList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  padding: 0;
+}
+
+/* Closer */
+.closer {
+  padding-top: clamp(3.5rem, 2rem + 4vw, 5.5rem);
+}
+
+.closerInner {
+  border: 1px solid var(--brand-border);
+  background: var(--brand-bg);
+  border-radius: var(--r-3);
+  padding: clamp(2rem, 1rem + 3vw, 3.25rem);
+  text-align: center;
+}
+
+.closerInner h2 {
+  font-size: var(--step-3);
+  letter-spacing: -0.02em;
+}
+
+.closerInner p {
+  margin: 0.7rem auto 1.5rem;
+  max-width: 44ch;
+  color: var(--ink-2);
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 2.25rem;
+  }
+
+  .specimenNote {
+    text-align: left;
+  }
+
+  .cliGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .scope {
+    grid-template-columns: 1fr;
+  }
+
+  .scopeNot {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem 1rem;
+  }
+
+  .endpointRow {
+    grid-template-columns: 3rem 1fr;
+    row-gap: 0.3rem;
+  }
+
+  .epurpose {
+    grid-column: 2;
+  }
+
+  .objectRow {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+}

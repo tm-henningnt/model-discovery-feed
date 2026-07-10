@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { exampleFeed } from "./fixture";
-import { filterModels } from "./filter";
+import { filterModels, modelSearchHaystack } from "./filter";
 
 describe("filterModels", () => {
   beforeEach(() => {
@@ -61,5 +61,12 @@ describe("filterModels", () => {
       "openrouter:qwen/qwen3-coder:free",
       "groq:openai/gpt-oss-120b"
     ]);
+  });
+
+  it("builds a search haystack including id, display name, provider name, and provider_model_id", () => {
+    const model = exampleFeed.models[0];
+    expect(modelSearchHaystack(model)).toBe(
+      "openrouter:qwen/qwen3-coder:free qwen3 coder (free) openrouter qwen/qwen3-coder:free"
+    );
   });
 });

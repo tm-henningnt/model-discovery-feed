@@ -1,0 +1,258 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-backdrop);
+  border: 0;
+  background: oklch(0.2 0.01 165 / 0.4);
+  cursor: pointer;
+  animation: fade 0.2s var(--ease) both;
+}
+
+.panel {
+  position: relative;
+  z-index: var(--z-drawer);
+  width: min(560px, 100%);
+  height: 100%;
+  overflow-y: auto;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-2);
+  animation: slide 0.32s var(--ease) both;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(2.5rem);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .backdrop {
+    animation: none;
+  }
+}
+
+.head {
+  padding: 1.35rem clamp(1.25rem, 0.5rem + 2vw, 1.9rem) 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.headTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.close {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-2);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+
+.close:hover {
+  color: var(--ink);
+  border-color: var(--ink-2);
+}
+
+.title {
+  font-size: var(--step-2);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.provider {
+  margin-top: 0.3rem;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.id {
+  margin-top: 0.5rem;
+  font-size: var(--step-xs);
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.desc {
+  margin-top: 0.85rem;
+  color: var(--muted);
+  font-size: var(--step-sm);
+  line-height: 1.55;
+}
+
+.body {
+  padding: 0.5rem clamp(1.25rem, 0.5rem + 2vw, 1.9rem) 2.5rem;
+}
+
+.section {
+  padding: 1.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.section:last-child {
+  border-bottom: 0;
+}
+
+.sectionTitle {
+  font-family: var(--font-mono);
+  font-size: var(--step-xs);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.85rem;
+}
+
+.sectionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: baseline;
+  font-size: var(--step-sm);
+}
+
+.fieldLabel {
+  color: var(--muted);
+}
+
+.fieldValue {
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.freeBox {
+  margin-top: 0.6rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--brand-border);
+  background: var(--brand-bg);
+  border-radius: var(--r-2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.freeTitle {
+  font-weight: 600;
+  color: var(--brand-ink);
+  font-size: var(--step-sm);
+  margin-bottom: 0.2rem;
+}
+
+.freeBox .fieldLabel {
+  color: var(--ink-2);
+}
+
+.note {
+  color: var(--muted);
+  font-size: var(--step-sm);
+  line-height: 1.5;
+}
+
+.claims {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.claim {
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--surface);
+}
+
+.claimHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: var(--step-sm);
+  color: var(--ink);
+}
+
+.claimMeta {
+  margin-top: 0.3rem;
+  font-size: var(--step-xs);
+  color: var(--muted);
+}
+
+.claimUrl {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: var(--step-xs);
+  word-break: break-all;
+}
+
+.claimFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
+.claimFields span {
+  font-size: var(--step-xs);
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+  padding: 0.05rem 0.35rem;
+}
+
+@media (max-width: 480px) {
+  .field {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+
+  .fieldLabel {
+    font-size: var(--step-xs);
+  }
+}

@@ -1,4 +1,4 @@
-import { hasStaleFreeClaim } from "./classification";
+import { isConfidentlyFree } from "./classification";
 import type { FeedDocument, ModelOffering, PricingKind } from "./schema";
 
 export type ModelFilters = {
@@ -71,16 +71,15 @@ export function filterModels(feed: FeedDocument, filters: ModelFilters, now = ne
     if (profileOfferingId && model.id !== profileOfferingId) return false;
     if (filters.profile && !profileOfferingId) return false;
     if (filters.q) {
-      const haystack = `${model.id} ${model.display_name} ${model.provider.name} ${model.provider_model_id}`.toLowerCase();
-      if (!haystack.includes(filters.q.toLowerCase())) return false;
+      if (!modelSearchHaystack(model).includes(filters.q.toLowerCase())) return false;
     }
 
     return model.policy.visibility === "listed";
   });
 }
 
-function isConfidentlyFree(model: ModelOffering, now = new Date()): boolean {
-  return model.pricing.kind === "free" && model.pricing.free?.is_currently_free === true && !hasStaleFreeClaim(model, now);
+export function modelSearchHaystack(model: ModelOffering): string {
+  return `${model.id} ${model.display_name} ${model.provider.name} ${model.provider_model_id}`.toLowerCase();
 }
 
 function modelRequiresApiKey(feed: FeedDocument, model: ModelOffering): boolean | undefined {
