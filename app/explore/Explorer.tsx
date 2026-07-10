@@ -19,6 +19,7 @@ import {
   statusLabel
 } from "../lib/format";
 import { ModelDetail } from "./ModelDetail";
+import { ExportDrawer } from "./ExportDrawer";
 import styles from "./Explorer.module.css";
 
 type Props = {
@@ -92,6 +93,7 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
   });
   const [openId, setOpenId] = useState<string | null>(() => searchParams.get(PARAMS.model));
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // State -> URL only. We never read searchParams back into state outside the
   // lazy initializers above, so this effect can't loop against itself; back/
@@ -246,6 +248,16 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
             <option value="price">Price (low→high)</option>
           </select>
         </label>
+        <button
+          type="button"
+          className={`btn btn-secondary ${styles.exportToggle}`}
+          onClick={() => {
+            setOpenId(null);
+            setExportOpen(true);
+          }}
+        >
+          Export
+        </button>
       </div>
 
       <div className={styles.layout}>
@@ -479,6 +491,8 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
           nowMs={nowMs}
         />
       ) : null}
+
+      {exportOpen ? <ExportDrawer models={filtered} onClose={() => setExportOpen(false)} /> : null}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import type { ModelOffering, Provider } from "@/feed/schema";
 import { CodeBlock } from "../components/CodeBlock";
 import { StatusChip } from "../components/StatusChip";
@@ -15,6 +15,7 @@ import {
   safeHttpUrl,
   statusLabel
 } from "../lib/format";
+import { useFocusTrap } from "./use-focus-trap";
 import styles from "./ModelDetail.module.css";
 
 type Props = {
@@ -28,53 +29,7 @@ export function ModelDetail({ model, provider, onClose, nowMs }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    closeRef.current?.focus();
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    function focusables(): HTMLElement[] {
-      return Array.from(
-        panelRef.current?.querySelectorAll<HTMLElement>(
-          'a[href], button:not([tabindex="-1"]), input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        ) ?? []
-      );
-    }
-
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onClose();
-        return;
-      }
-      if (e.key !== "Tab") return;
-
-      const items = focusables();
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      const active = document.activeElement;
-
-      if (!panelRef.current?.contains(active)) {
-        e.preventDefault();
-        first.focus();
-        return;
-      }
-      if (e.shiftKey && active === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-      previouslyFocused?.focus?.();
-    };
-  }, [onClose]);
+  useFocusTrap(panelRef, closeRef, onClose);
 
   const free = model.pricing.free;
   const homepage = safeHttpUrl(provider?.homepage);

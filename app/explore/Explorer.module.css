@@ -87,6 +87,10 @@
   height: 42px;
 }
 
+.exportToggle {
+  height: 42px;
+}
+
 /* Layout: rail + results */
 .layout {
   display: grid;
