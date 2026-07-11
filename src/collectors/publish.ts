@@ -59,8 +59,16 @@ export type PrismaPublishTransaction = {
   };
 };
 
+export type PrismaTransactionOptions = {
+  maxWait?: number;
+  timeout?: number;
+};
+
 export type PrismaPublishClient = {
-  $transaction<T>(callback: (tx: PrismaPublishTransaction) => Promise<T>): Promise<T>;
+  $transaction<T>(
+    callback: (tx: PrismaPublishTransaction) => Promise<T>,
+    options?: PrismaTransactionOptions
+  ): Promise<T>;
   sourceSnapshot?: {
     findFirst(args: {
       where: { collector: string; sourceType: string };
@@ -218,6 +226,13 @@ export async function runCollectorsAndPublish(options: {
         }
       });
     }
+  }, {
+    // The publish transaction issues many sequential writes (one collectorRun +
+    // sourceSnapshot per collector, plus the AA snapshot and the feed release).
+    // Against a remote database the round-trips add up and blow past Prisma's
+    // 5s default interactive-transaction timeout, so raise both limits.
+    maxWait: 15_000,
+    timeout: 60_000
   });
 
   if (validationFailure) {

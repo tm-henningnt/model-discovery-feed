@@ -13,3 +13,4 @@ plans/
 .DS_Store
 docs/PRD/
 .playwright-cli/
+.cline-profiles.json
