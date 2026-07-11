@@ -120,7 +120,10 @@ function normalizeGeminiModel(raw: GeminiModel, observedAt: string, index: numbe
     provider_model_id: providerModelId,
     canonical_model: {
       id: providerModelId,
-      confidence: normalizeText(raw.baseModelId) ? "high" : "medium"
+      confidence: normalizeText(raw.baseModelId) ? "high" : "medium",
+      knowledge_cutoff: null,
+      release_date: null,
+      open_weights: null
     },
     description,
     endpoint: {
@@ -150,7 +153,9 @@ function normalizeGeminiModel(raw: GeminiModel, observedAt: string, index: numbe
     quality: {
       coding_score: null,
       reasoning_score: null,
+      agentic_score: null,
       speed_score: null,
+      benchmarks: null,
       recommendation_notes: []
     },
     source_claims: [

@@ -1,6 +1,14 @@
 import { ZodError } from "zod";
 import type { FeedDocument, Provider } from "../feed/schema";
 import { validateFeedDocument } from "../feed/schema";
+import {
+  ARTIFICIAL_ANALYSIS_API_URL,
+  ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
+  ARTIFICIAL_ANALYSIS_SNAPSHOT_TYPE,
+  clearArtificialAnalysisEndpointScores,
+  type ArtificialAnalysisSnapshot
+} from "../enrichers/artificial-analysis";
+import { enrichModels } from "../enrichers/pipeline";
 import { getFixtureFeed, mergeCollectorFeed, runCollectors } from "./index";
 import type { Collector, CollectorContext, CollectorNotice } from "./types";
 
@@ -34,7 +42,7 @@ export type PrismaPublishTransaction = {
         sourceUrl: string | null;
         collector: string;
         observedAt: Date;
-        body: CollectorSnapshotBody;
+        body: CollectorSnapshotBody | Record<string, unknown>;
         collectorRunId: string;
       };
     }): Promise<unknown>;
@@ -53,7 +61,33 @@ export type PrismaPublishTransaction = {
 
 export type PrismaPublishClient = {
   $transaction<T>(callback: (tx: PrismaPublishTransaction) => Promise<T>): Promise<T>;
+  sourceSnapshot?: {
+    findFirst(args: {
+      where: { collector: string; sourceType: string };
+      orderBy: { observedAt: "desc" };
+    }): Promise<{
+      id: string;
+      observedAt: Date;
+      body: unknown;
+    } | null>;
+  };
 };
+
+async function latestArtificialAnalysisSnapshot(
+  prisma: PrismaPublishClient
+): Promise<ArtificialAnalysisSnapshot | null> {
+  if (!prisma.sourceSnapshot) {
+    return null;
+  }
+
+  return prisma.sourceSnapshot.findFirst({
+    where: {
+      collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
+      sourceType: ARTIFICIAL_ANALYSIS_SNAPSHOT_TYPE
+    },
+    orderBy: { observedAt: "desc" }
+  });
+}
 
 function collectorRunStatus(notices: CollectorNotice[]): string {
   return notices.length > 0 ? "completed_with_notices" : "completed";
@@ -94,7 +128,19 @@ export async function runCollectorsAndPublish(options: {
 }): Promise<FeedDocument> {
   const baseFeed = options.baseFeed ?? getFixtureFeed();
   const { providers, models, notices, executions } = await runCollectors(options.context, options.collectors);
-  const merged = mergeCollectorFeed(baseFeed, providers, models, notices, options.context.now);
+  const fallbackSnapshot = await latestArtificialAnalysisSnapshot(options.prisma);
+  const enriched = await enrichModels(models, options.context, { fallbackSnapshot });
+  const mergedFeed = mergeCollectorFeed(
+    baseFeed,
+    providers,
+    enriched.models,
+    [...notices, ...enriched.notices],
+    options.context.now
+  );
+  const merged = {
+    ...mergedFeed,
+    models: mergedFeed.models.map(clearArtificialAnalysisEndpointScores)
+  };
   const generatedAt = new Date(merged.feed.generated_at);
 
   let validated: FeedDocument | null = null;
@@ -135,6 +181,31 @@ export async function runCollectorsAndPublish(options: {
           collectorRunId: run.id
         }
       });
+    }
+
+    if (enriched.artificialAnalysis.attemptedFetch) {
+      const run = await tx.collectorRun.create({
+        data: {
+          collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
+          status: collectorRunStatus(enriched.artificialAnalysis.notices),
+          startedAt: options.context.now,
+          finishedAt: options.context.now,
+          errorMessage: collectorRunErrorMessage(enriched.artificialAnalysis.notices, validationError)
+        }
+      });
+
+      if (enriched.artificialAnalysis.snapshotToPersist) {
+        await tx.sourceSnapshot.create({
+          data: {
+            sourceType: ARTIFICIAL_ANALYSIS_SNAPSHOT_TYPE,
+            sourceUrl: ARTIFICIAL_ANALYSIS_API_URL,
+            collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
+            observedAt: options.context.now,
+            body: enriched.artificialAnalysis.snapshotToPersist as Record<string, unknown>,
+            collectorRunId: run.id
+          }
+        });
+      }
     }
 
     if (validated) {

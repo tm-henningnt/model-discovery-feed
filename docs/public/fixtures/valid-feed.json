@@ -59,7 +59,10 @@
       "provider_model_id": "qwen/qwen3-coder:free",
       "canonical_model": {
         "id": "qwen/qwen3-coder",
-        "confidence": "high"
+        "confidence": "high",
+        "knowledge_cutoff": null,
+        "release_date": null,
+        "open_weights": null
       },
       "description": "Fixture free coding-capable OpenRouter offering.",
       "endpoint": {
@@ -99,7 +102,9 @@
       "quality": {
         "coding_score": null,
         "reasoning_score": null,
+        "agentic_score": null,
         "speed_score": null,
+        "benchmarks": null,
         "recommendation_notes": []
       },
       "source_claims": [
@@ -135,7 +140,10 @@
       "provider_model_id": "openai/gpt-oss-120b",
       "canonical_model": {
         "id": "openai/gpt-oss-120b",
-        "confidence": "medium"
+        "confidence": "medium",
+        "knowledge_cutoff": null,
+        "release_date": null,
+        "open_weights": null
       },
       "description": "Fixture Groq OpenAI-compatible coding offering with unknown pricing.",
       "endpoint": {
@@ -165,7 +173,9 @@
       "quality": {
         "coding_score": null,
         "reasoning_score": null,
+        "agentic_score": null,
         "speed_score": null,
+        "benchmarks": null,
         "recommendation_notes": []
       },
       "source_claims": [

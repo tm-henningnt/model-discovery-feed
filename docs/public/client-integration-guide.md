@@ -190,12 +190,17 @@ Top-level feed document:
 type FeedDocument = {
   schema_version: "1.0.0";
   feed: FeedMetadata;
+  attributions: Array<{ source: string; url: string; notice: string }>;
   providers: Provider[];
   models: ModelOffering[];
   profiles: FeedProfile[];
   notices: Array<Record<string, unknown>>;
 };
 ```
+
+`attributions` names every third-party data source the feed republishes into `quality`/`canonical_model`
+fields (e.g. Artificial Analysis, models.dev, Design Arena). If your client surfaces those fields to a
+user, carry the matching attribution forward.
 
 Feed metadata:
 
@@ -246,6 +251,13 @@ type ModelOffering = {
   policy: Policy | null;
 };
 ```
+
+`canonical_model` additionally carries `knowledge_cutoff`, `release_date`, and `open_weights`
+(all nullable, gap-filled from models.dev when a provider's own API doesn't supply them). `quality`
+carries `coding_score`, `reasoning_score`, `agentic_score`, `speed_score` (third-party benchmark
+scores in their source's own units, verbatim — never normalized; `null` means unscored, not zero) and
+a `benchmarks` object with sub-benchmark detail. `/v1/schema` has the full, authoritative shape of
+both.
 
 ## 7. Adapter Boundary
 

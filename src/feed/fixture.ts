@@ -11,6 +11,23 @@ export const exampleFeed: FeedDocument = {
     source_revision: "fixture-2026-07-08T12:00:00.000Z",
     default_stale_after_seconds: 86400
   },
+  attributions: [
+    {
+      source: "Artificial Analysis",
+      url: "https://artificialanalysis.ai/",
+      notice: "Model quality and performance scores by Artificial Analysis."
+    },
+    {
+      source: "models.dev",
+      url: "https://models.dev/",
+      notice: "Model metadata from models.dev (MIT)."
+    },
+    {
+      source: "Design Arena",
+      url: "https://designarena.ai/",
+      notice: "Design Arena Elo ratings."
+    }
+  ],
   providers: [
     {
       id: "openrouter",
@@ -58,7 +75,13 @@ export const exampleFeed: FeedDocument = {
       display_name: "Qwen3 Coder (free)",
       provider: { id: "openrouter", name: "OpenRouter" },
       provider_model_id: "qwen/qwen3-coder:free",
-      canonical_model: { id: "qwen/qwen3-coder", confidence: "high" },
+      canonical_model: {
+        id: "qwen/qwen3-coder",
+        confidence: "high",
+        knowledge_cutoff: null,
+        release_date: null,
+        open_weights: null
+      },
       description: "Fixture free coding-capable OpenRouter offering.",
       endpoint: {
         protocol: "openai_chat_completions",
@@ -92,9 +115,20 @@ export const exampleFeed: FeedDocument = {
         stale_after_seconds: 86400
       },
       quality: {
-        coding_score: null,
-        reasoning_score: null,
-        speed_score: null,
+        coding_score: 71.4,
+        reasoning_score: 51.2,
+        agentic_score: 45.6,
+        speed_score: 245,
+        benchmarks: {
+          math_score: 62.1,
+          ttft_seconds: 0.31,
+          artificial_analysis: {
+            mmlu_pro: 0.78,
+            gpqa: 0.61,
+            livecodebench: 0.55
+          },
+          design_arena: [{ arena: "overall", elo: 1123, rank: 14, win_rate: 0.52 }]
+        },
         recommendation_notes: []
       },
       source_claims: [
@@ -107,6 +141,34 @@ export const exampleFeed: FeedDocument = {
           field_paths: ["pricing", "limits.context_tokens", "capabilities", "availability.status"],
           confidence: "high",
           raw_reference: { snapshot_id: "fixture_openrouter", json_pointer: "/data/0" }
+        },
+        {
+          id: "claim_fixture_openrouter_qwen_aa",
+          source_type: "third_party_catalog",
+          source_url: "https://artificialanalysis.ai/",
+          collector: "fixture",
+          observed_at: observedAt,
+          field_paths: [
+            "quality.coding_score",
+            "quality.reasoning_score",
+            "quality.agentic_score",
+            "quality.speed_score",
+            "quality.benchmarks.math_score",
+            "quality.benchmarks.ttft_seconds",
+            "quality.benchmarks.artificial_analysis"
+          ],
+          confidence: "high",
+          raw_reference: { snapshot_id: "fixture_artificial_analysis", json_pointer: "/data/0" }
+        },
+        {
+          id: "claim_fixture_openrouter_qwen_design_arena",
+          source_type: "third_party_catalog",
+          source_url: "https://designarena.ai/",
+          collector: "fixture",
+          observed_at: observedAt,
+          field_paths: ["quality.benchmarks.design_arena"],
+          confidence: "high",
+          raw_reference: { snapshot_id: "fixture_design_arena", json_pointer: "/data/0" }
         }
       ],
       policy: {
@@ -121,7 +183,13 @@ export const exampleFeed: FeedDocument = {
       display_name: "GPT OSS 120B",
       provider: { id: "groq", name: "Groq" },
       provider_model_id: "openai/gpt-oss-120b",
-      canonical_model: { id: "openai/gpt-oss-120b", confidence: "medium" },
+      canonical_model: {
+        id: "openai/gpt-oss-120b",
+        confidence: "medium",
+        knowledge_cutoff: null,
+        release_date: null,
+        open_weights: null
+      },
       description: "Fixture Groq OpenAI-compatible coding offering with unknown pricing.",
       endpoint: {
         protocol: "openai_chat_completions",
@@ -147,7 +215,9 @@ export const exampleFeed: FeedDocument = {
       quality: {
         coding_score: null,
         reasoning_score: null,
+        agentic_score: null,
         speed_score: null,
+        benchmarks: null,
         recommendation_notes: []
       },
       source_claims: [

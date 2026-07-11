@@ -23,6 +23,11 @@ export const feedJsonSchema = {
     notices: {
       type: "array",
       items: { $ref: "#/$defs/notice" }
+    },
+    attributions: {
+      type: "array",
+      default: [],
+      items: { $ref: "#/$defs/attribution" }
     }
   },
   $defs: {
@@ -189,11 +194,14 @@ export const feedJsonSchema = {
     },
     canonical_model: {
       type: "object",
-      required: ["id", "confidence"],
+      required: ["id", "confidence", "knowledge_cutoff", "release_date", "open_weights"],
       additionalProperties: true,
       properties: {
         id: { type: "string", minLength: 1 },
-        confidence: { $ref: "#/$defs/confidence" }
+        confidence: { $ref: "#/$defs/confidence" },
+        knowledge_cutoff: { type: ["string", "null"], format: "date" },
+        release_date: { type: ["string", "null"], format: "date" },
+        open_weights: { type: ["boolean", "null"] }
       }
     },
     endpoint: {
@@ -297,16 +305,75 @@ export const feedJsonSchema = {
     },
     quality: {
       type: "object",
-      required: ["coding_score", "reasoning_score", "speed_score", "recommendation_notes"],
+      required: [
+        "coding_score",
+        "reasoning_score",
+        "agentic_score",
+        "speed_score",
+        "benchmarks",
+        "recommendation_notes"
+      ],
       additionalProperties: true,
       properties: {
-        coding_score: { type: ["number", "null"] },
-        reasoning_score: { type: ["number", "null"] },
-        speed_score: { type: ["number", "null"] },
+        coding_score: {
+          type: ["number", "null"],
+          description: "Artificial Analysis coding index, 0–100, stored verbatim."
+        },
+        reasoning_score: {
+          type: ["number", "null"],
+          description: "Artificial Analysis intelligence index, 0–100, stored verbatim."
+        },
+        agentic_score: {
+          type: ["number", "null"],
+          description: "Artificial Analysis agentic index, 0–100, stored verbatim."
+        },
+        speed_score: {
+          type: ["number", "null"],
+          description: "Artificial Analysis median output speed in tokens/sec, stored verbatim."
+        },
+        benchmarks: {
+          anyOf: [{ type: "null" }, { $ref: "#/$defs/quality_benchmarks" }]
+        },
         recommendation_notes: {
           type: "array",
           items: { type: "string" }
         }
+      }
+    },
+    quality_benchmarks: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        math_score: {
+          type: ["number", "null"],
+          description: "Artificial Analysis math index, 0–100, stored verbatim."
+        },
+        ttft_seconds: {
+          type: ["number", "null"],
+          minimum: 0,
+          description: "Artificial Analysis median time to first token in seconds, stored verbatim."
+        },
+        artificial_analysis: {
+          type: ["object", "null"],
+          additionalProperties: { type: "number" },
+          description: "Artificial Analysis sub-benchmark scores, stored verbatim."
+        },
+        design_arena: {
+          type: ["array", "null"],
+          description: "Design Arena ratings, stored verbatim.",
+          items: { $ref: "#/$defs/design_arena_rating" }
+        }
+      }
+    },
+    design_arena_rating: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        arena: { type: ["string", "null"] },
+        category: { type: ["string", "null"] },
+        elo: { type: ["number", "null"] },
+        rank: { type: ["number", "null"] },
+        win_rate: { type: ["number", "null"] }
       }
     },
     policy: {
@@ -403,6 +470,16 @@ export const feedJsonSchema = {
     notice: {
       type: "object",
       additionalProperties: true
+    },
+    attribution: {
+      type: "object",
+      required: ["source", "url", "notice"],
+      additionalProperties: true,
+      properties: {
+        source: { type: "string", minLength: 1 },
+        url: { type: "string", format: "uri" },
+        notice: { type: "string", minLength: 1 }
+      }
     }
   }
 } as const;

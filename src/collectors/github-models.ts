@@ -95,7 +95,10 @@ function normalizeGitHubModel(raw: GitHubModel, observedAt: string, index: numbe
     provider_model_id: providerModelId,
     canonical_model: {
       id: providerModelId,
-      confidence: "medium"
+      confidence: "medium",
+      knowledge_cutoff: null,
+      release_date: null,
+      open_weights: null
     },
     description,
     endpoint: {
@@ -125,7 +128,9 @@ function normalizeGitHubModel(raw: GitHubModel, observedAt: string, index: numbe
     quality: {
       coding_score: null,
       reasoning_score: null,
+      agentic_score: null,
       speed_score: null,
+      benchmarks: null,
       recommendation_notes: []
     },
     source_claims: [

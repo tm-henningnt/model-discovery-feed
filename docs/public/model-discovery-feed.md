@@ -19,17 +19,23 @@ Key invariants:
 - `model_offering.pricing.kind = "free"` must include `pricing.free` metadata.
 - Facts and opinions are separate. Source claims describe observations; quality and recommendation fields are feed-owner judgments.
 - `free` is not a boolean. The feed records why an offering is free, when that was last verified, and whether the claim expires.
+- `model_offering.quality` scores are stored verbatim in their source's own units (0-100 indexes, tokens/sec, seconds) — never normalized or rescaled by the feed. A `null` score means unscored, not zero.
+- `attributions` names every third-party data source the feed republishes (e.g. Artificial Analysis, models.dev, Design Arena). Clients that surface `quality` data should carry that attribution forward.
 
 Important fields:
 
 - `feed.generated_at`, `feed.expires_at`, `feed.source_revision`, `feed.default_stale_after_seconds`
+- `attributions`: third-party data source credits (`source`, `url`, `notice`)
 - `provider.api_protocols`, `provider.authentication`, `provider.signup`
 - `model_offering.provider_model_id`, `model_offering.canonical_model`
+- `model_offering.canonical_model.knowledge_cutoff`, `.release_date`, `.open_weights`: model-level metadata gap-filled from models.dev when a provider's own API doesn't supply it
 - `model_offering.endpoint.protocol`, `model_offering.endpoint.base_url`, `model_offering.endpoint.model`
 - `model_offering.capabilities`
 - `model_offering.limits.context_tokens`, `model_offering.limits.max_output_tokens`
 - `model_offering.pricing.kind`, `model_offering.pricing.free`
 - `model_offering.availability.status`
+- `model_offering.quality.coding_score`, `.reasoning_score`, `.agentic_score`, `.speed_score`: third-party benchmark scores, verbatim units, `null` when unscored
+- `model_offering.quality.benchmarks`: sub-benchmark detail (math score, time-to-first-token, per-benchmark scores, Design Arena Elo)
 - `model_offering.policy.visibility`, `model_offering.policy.tags`
 
 ### Free classification
@@ -55,6 +61,20 @@ When `pricing.kind = "free"`, `pricing.free` records:
 - `expires_at`
 - `last_verified_at`
 - `confidence`
+
+### Quality scores
+
+`quality` carries third-party benchmark scores for an offering, when available. Every field is stored
+verbatim in its source's own units — no normalization, no rescaling:
+
+- `coding_score`, `reasoning_score`, `agentic_score`: 0-100 indexes.
+- `speed_score`: median output tokens/sec, when a source measures it per provider endpoint. As of this
+  writing no integrated source exposes per-endpoint speed, so this field is `null` feed-wide.
+- `benchmarks`: sub-benchmark detail (`math_score`, `ttft_seconds`, per-benchmark scores under
+  `artificial_analysis`, and `design_arena` Elo ratings), or `null` when no detail is available.
+
+A `null` quality field means unscored, not a zero or a negative judgment. `attributions` names
+the sources these scores come from; carry that attribution forward wherever you surface them.
 
 ## Endpoints
 

@@ -20,6 +20,7 @@ export default async function ExplorePage() {
       <Explorer
         models={listed}
         providers={feed.providers}
+        attributions={feed.attributions}
         generatedAt={status.generated_at}
         stale={status.stale}
         usingFixture={usingFixture}

@@ -12,7 +12,7 @@ The primary human-facing surface is the landing/home page. There is no applicati
 
 ## Product Purpose
 
-The Model Discovery Feed is a provider-agnostic contract for publishing and consuming LLM model discovery data — models, capabilities, providers, pricing, and status — as versioned JSON. This repository is the reference Next.js + Prisma implementation: it shows how to publish the feed, validate fixtures, and expose the contract over HTTP (`/v1/schema`, `/v1/feed`, `/v1/status`, `/v1/models`, `/v1/providers`).
+The Model Discovery Feed is a provider-agnostic contract for publishing and consuming LLM model discovery data — models, capabilities, providers, pricing, status, and third-party quality/benchmark scores — as versioned JSON. This repository is the reference Next.js + Prisma implementation: it shows how to publish the feed, validate fixtures, and expose the contract over HTTP (`/v1/schema`, `/v1/feed`, `/v1/status`, `/v1/models`, `/v1/providers`). Delegation profiles (e.g. best-coder, fastest-coder) let a consumer — human or an orchestrating agent — pick the best-fit model for a task from the scored catalog.
 
 It is explicitly **not** an inference proxy, a model router, or a credential store. Success is an evaluator understanding the contract and trusting the implementation quickly enough to adopt it, build a client against it, or contribute — without the landing page overselling or obscuring what the project is.
 

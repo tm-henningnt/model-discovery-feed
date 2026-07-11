@@ -13,6 +13,16 @@ export function formatTokens(tokens: number | null | undefined): string {
   return String(tokens);
 }
 
+/** Scores are published in their source units, so display them verbatim. */
+export function formatScore(score: number | null | undefined): string {
+  return score == null ? "—" : String(score);
+}
+
+export function formatSpeed(tokensPerSecond: number | null | undefined): string {
+  const score = formatScore(tokensPerSecond);
+  return score === "—" ? score : `${score} t/s`;
+}
+
 export function safeHttpUrl(value: string | null | undefined): string | null {
   if (!value) return null;
   try {

@@ -353,6 +353,16 @@
   white-space: nowrap;
 }
 
+.attribution {
+  margin: -0.35rem 0 0.85rem;
+  color: var(--muted);
+  font-size: var(--step-xs);
+}
+
+.attribution a {
+  color: var(--brand-ink);
+}
+
 .activeChips {
   display: flex;
   flex-wrap: wrap;
@@ -414,6 +424,10 @@
 
 .num {
   text-align: right;
+}
+
+.scoreColumn {
+  min-width: 5.75rem;
 }
 
 .row {
@@ -494,6 +508,18 @@
 }
 
 /* Responsive */
+@media (max-width: 1120px) {
+  .speedColumn {
+    display: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .scoreColumn {
+    display: none;
+  }
+}
+
 @media (max-width: 860px) {
   .layout {
     grid-template-columns: 1fr;

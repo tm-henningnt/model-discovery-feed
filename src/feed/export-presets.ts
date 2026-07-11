@@ -1,6 +1,28 @@
+import type { DelegationProfileId } from "./ranking";
 import type { ExportTemplate } from "./export-template";
 
-export type ExportPreset = ExportTemplate & { id: string };
+export type ExportPreset = ExportTemplate & { id: string; profileId?: DelegationProfileId };
+
+const DELEGATION_TABLE_ROW =
+  "| {{id|md}} | {{provider.name|md}} | {{_coding_score}} | {{_reasoning_score}} | {{_agentic_score}} | " +
+  "{{_speed_score}} | {{limits.context_tokens|tokens}} | {{_blended_price_per_1m}} |";
+
+const DELEGATION_TABLE_WRAPPER =
+  "| Model | Provider | Coding | Reasoning | Agentic | Speed | Context | $/1M (blended) |\n" +
+  "| --- | --- | --- | --- | --- | --- | --- | --- |\n" +
+  "{{rows}}\n\n" +
+  "_Scores by [Artificial Analysis](https://artificialanalysis.ai/)._";
+
+function delegationTablePreset(id: string, name: string, profileId?: DelegationProfileId): ExportPreset {
+  return {
+    id,
+    name,
+    profileId,
+    rowTemplate: DELEGATION_TABLE_ROW,
+    wrapperTemplate: DELEGATION_TABLE_WRAPPER,
+    rowSeparator: "\n"
+  };
+}
 
 export const EXPORT_PRESETS: ExportPreset[] = [
   {
@@ -36,5 +58,11 @@ export const EXPORT_PRESETS: ExportPreset[] = [
       '"{{id|csv}}","{{display_name|csv}}","{{provider.id|csv}}","{{provider_model_id|csv}}","{{pricing.kind|csv}}","{{availability.status|csv}}"',
     wrapperTemplate: "id,name,provider,model,pricing,status\n{{rows}}",
     rowSeparator: "\n"
-  }
+  },
+  delegationTablePreset("preset-delegation-table", "Delegation table (Markdown)"),
+  delegationTablePreset("preset-best-coder", "Best coder (Markdown)", "best-coder"),
+  delegationTablePreset("preset-best-agentic", "Best agentic (Markdown)", "best-agentic"),
+  delegationTablePreset("preset-fastest-coder", "Fastest coder (Markdown)", "fastest-coder"),
+  delegationTablePreset("preset-best-value-coder", "Best value coder (Markdown)", "best-value-coder"),
+  delegationTablePreset("preset-best-free-coder", "Best free coder (Markdown)", "best-free-coder")
 ];

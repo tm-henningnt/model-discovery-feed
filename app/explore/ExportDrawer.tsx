@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ModelOffering } from "@/feed/schema";
 import { escapeRowSeparator, parseRowSeparator, renderExport, slugify } from "@/feed/export-template";
+import { rankByProfile } from "@/feed/ranking";
 import { useExportTemplates } from "./use-export-templates";
 import { useFocusTrap } from "./use-focus-trap";
 import styles from "./ExportDrawer.module.css";
@@ -39,7 +40,8 @@ export function ExportDrawer({ models, onClose }: Props) {
 
   const { output, error } = useMemo(() => {
     try {
-      return { output: renderExport(selected, models), error: null as string | null };
+      const rows = selected.profileId ? rankByProfile(models, selected.profileId) : models;
+      return { output: renderExport(selected, rows), error: null as string | null };
     } catch (e) {
       return { output: "", error: e instanceof Error ? e.message : String(e) };
     }

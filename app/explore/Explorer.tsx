@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { ModelOffering, Provider } from "@/feed/schema";
+import type { FeedDocument, ModelOffering, Provider } from "@/feed/schema";
 import { isConfidentlyFree } from "@/feed/classification";
-import { compareForBestFreeCoder } from "@/feed/ranking";
+import { compareNullableNumbersDescending, compareRecommended } from "@/feed/ranking";
 import { computeFacetCounts, filterExplorerModels, type ExplorerFilters } from "@/feed/facets";
 import { StatusChip } from "../components/StatusChip";
 import {
@@ -12,10 +12,13 @@ import {
   capabilityLabel,
   formatPrice,
   formatRelativeTime,
+  formatScore,
+  formatSpeed,
   formatTokens,
   pricingLabel,
   pricingTone,
   protocolLabel,
+  safeHttpUrl,
   statusLabel
 } from "../lib/format";
 import { ModelDetail } from "./ModelDetail";
@@ -25,15 +28,16 @@ import styles from "./Explorer.module.css";
 type Props = {
   models: ModelOffering[];
   providers: Provider[];
+  attributions: FeedDocument["attributions"];
   generatedAt: string;
   stale: boolean;
   usingFixture: boolean;
   nowMs: number;
 };
 
-type SortKey = "default" | "name" | "context" | "price";
+type SortKey = "default" | "name" | "context" | "price" | "coding" | "reasoning" | "speed";
 
-const SORT_KEYS: SortKey[] = ["default", "name", "context", "price"];
+const SORT_KEYS: SortKey[] = ["default", "name", "context", "price", "coding", "reasoning", "speed"];
 
 // Explorer state <-> URL query param mapping. Names mirror the API's own
 // filter params (src/feed/filter.ts) where a counterpart exists, so the
@@ -73,7 +77,7 @@ function countBy<T extends string>(models: ModelOffering[], pick: (m: ModelOffer
   return map;
 }
 
-export function Explorer({ models, providers, generatedAt, stale, usingFixture, nowMs }: Props) {
+export function Explorer({ models, providers, attributions, generatedAt, stale, usingFixture, nowMs }: Props) {
   const now = useMemo(() => new Date(nowMs), [nowMs]);
   const router = useRouter();
   const pathname = usePathname();
@@ -177,9 +181,21 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
     if (sort === "name") sorted.sort(byName);
     else if (sort === "context") sorted.sort((a, b) => context(b) - context(a) || byName(a, b));
     else if (sort === "price") sorted.sort((a, b) => price(a) - price(b) || byName(a, b));
-    else sorted.sort((a, b) => compareForBestFreeCoder(a, b, now));
+    else if (sort === "coding") {
+      sorted.sort((a, b) => compareNullableNumbersDescending(a.quality.coding_score, b.quality.coding_score) || byName(a, b));
+    } else if (sort === "reasoning") {
+      sorted.sort((a, b) => compareNullableNumbersDescending(a.quality.reasoning_score, b.quality.reasoning_score) || byName(a, b));
+    } else if (sort === "speed") {
+      sorted.sort((a, b) => compareNullableNumbersDescending(a.quality.speed_score, b.quality.speed_score) || byName(a, b));
+    }
+    else sorted.sort((a, b) => compareRecommended(a, b, now));
     return sorted;
   }, [models, filters, sort, now]);
+
+  const artificialAnalysisAttribution = attributions.find((attribution) => {
+    const url = safeHttpUrl(attribution.url);
+    return url ? new URL(url).hostname.endsWith("artificialanalysis.ai") : false;
+  });
 
   const activeCount =
     selProviders.size +
@@ -254,6 +270,9 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
             <option value="name">Name (A–Z)</option>
             <option value="context">Context (high→low)</option>
             <option value="price">Price (low→high)</option>
+            <option value="coding">Coding (high→low)</option>
+            <option value="reasoning">Reasoning (high→low)</option>
+            <option value="speed">Speed (high→low)</option>
           </select>
         </label>
         <button
@@ -278,7 +297,6 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
               </button>
             ) : null}
           </div>
-
           <FacetToggle
             label="Free right now"
             checked={freeOnly}
@@ -413,6 +431,16 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
             ) : null}
           </div>
 
+          <p className={styles.attribution}>
+            <a
+              href={artificialAnalysisAttribution?.url ?? "https://artificialanalysis.ai/"}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Scores by Artificial Analysis
+            </a>
+          </p>
+
           {filtered.length === 0 ? (
             <div className={styles.empty}>
               <p>No offerings match these filters.</p>
@@ -432,6 +460,15 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
                       Context
                     </th>
                     <th scope="col">Pricing</th>
+                    <th scope="col" className={`${styles.num} ${styles.scoreColumn}`}>
+                      Coding
+                    </th>
+                    <th scope="col" className={`${styles.num} ${styles.scoreColumn}`}>
+                      Reasoning
+                    </th>
+                    <th scope="col" className={`${styles.num} ${styles.scoreColumn} ${styles.speedColumn}`}>
+                      Speed
+                    </th>
                     <th scope="col">Status</th>
                   </tr>
                 </thead>
@@ -477,6 +514,11 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
                           <span className={`mono ${styles.priceNum}`}>{formatPrice(m, now)}</span>
                         </span>
                       </td>
+                      <td className={`mono ${styles.num} ${styles.scoreColumn}`}>{formatScore(m.quality.coding_score)}</td>
+                      <td className={`mono ${styles.num} ${styles.scoreColumn}`}>{formatScore(m.quality.reasoning_score)}</td>
+                      <td className={`mono ${styles.num} ${styles.scoreColumn} ${styles.speedColumn}`}>
+                        {formatSpeed(m.quality.speed_score)}
+                      </td>
                       <td>
                         <StatusChip tone={availabilityTone(m.availability.status)}>
                           {statusLabel(m.availability.status)}
@@ -495,6 +537,7 @@ export function Explorer({ models, providers, generatedAt, stale, usingFixture, 
         <ModelDetail
           model={openModel}
           provider={providers.find((p) => p.id === openModel.provider.id) ?? null}
+          artificialAnalysisAttribution={artificialAnalysisAttribution}
           onClose={() => setOpenId(null)}
           nowMs={nowMs}
         />

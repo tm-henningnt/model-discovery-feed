@@ -6,7 +6,7 @@ import type {
 } from "@/feed/schema";
 import { isConfidentlyFree } from "@/feed/classification";
 
-export { formatTokens, safeHttpUrl } from "@/feed/format";
+export { formatScore, formatSpeed, formatTokens, safeHttpUrl } from "@/feed/format";
 
 export type Tone = "ok" | "warn" | "bad" | "neutral";
 
@@ -73,6 +73,27 @@ export function capabilityLabel(cap: string): string {
 
 export function statusLabel(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, " ");
+}
+
+const SUB_BENCHMARK_LABEL: Record<string, string> = {
+  mmlu_pro: "MMLU-Pro",
+  gpqa: "GPQA",
+  hle: "HLE",
+  livecodebench: "LiveCodeBench",
+  scicode: "SciCode",
+  math_500: "MATH-500",
+  aime: "AIME",
+  aime_25: "AIME 25",
+  ifbench: "IFBench",
+  lcr: "LCR",
+  terminalbench_hard: "Terminal-Bench Hard",
+  terminalbench_v2_1: "Terminal-Bench v2.1",
+  tau2: "τ²-Bench",
+  tau_banking: "τ-Bench Banking"
+};
+
+export function subBenchmarkLabel(key: string): string {
+  return SUB_BENCHMARK_LABEL[key] ?? statusLabel(key);
 }
 
 const PROTOCOL_LABEL: Record<string, string> = {

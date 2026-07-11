@@ -67,7 +67,9 @@
       "quality": {
         "coding_score": null,
         "reasoning_score": null,
+        "agentic_score": null,
         "speed_score": null,
+        "benchmarks": null,
         "recommendation_notes": []
       },
       "source_claims": [

@@ -74,6 +74,7 @@ export const USAGE = [
   "  --pricing-kind <kind>      Filter by pricing kind",
   "  --provider <id>            Filter by provider id",
   "  --capability <name>        Filter by capability",
+  "  --profile <id>            Select a named delegation profile",
   "  --protocol <name>          Filter by endpoint protocol",
   "  --min-context-tokens <n>   Filter by minimum context window",
   "  --json                     Emit JSON output"
@@ -212,6 +213,10 @@ function parseListArgs(argv: string[]): CliListOptions {
         break;
       case "--capability":
         options.capability = requireValue(arg, next);
+        index += 1;
+        break;
+      case "--profile":
+        options.profile = requireValue(arg, next);
         index += 1;
         break;
       case "--protocol":

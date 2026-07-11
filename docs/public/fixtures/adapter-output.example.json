@@ -11,7 +11,13 @@
       "base_url": "https://openrouter.ai/api/v1",
       "model": "qwen/qwen3-coder:free"
     },
-    "capabilities": ["chat", "coding", "tool_use", "structured_output", "streaming"],
+    "capabilities": [
+      "chat",
+      "coding",
+      "tool_use",
+      "structured_output",
+      "streaming"
+    ],
     "context_tokens": 262144,
     "pricing_kind": "free",
     "pricing_explanation": "free via zero_priced_model",
@@ -20,6 +26,18 @@
       {
         "source_type": "provider_api",
         "source_url": "https://openrouter.ai/api/v1/models",
+        "observed_at": "2026-07-08T12:00:00.000Z",
+        "confidence": "high"
+      },
+      {
+        "source_type": "third_party_catalog",
+        "source_url": "https://artificialanalysis.ai/",
+        "observed_at": "2026-07-08T12:00:00.000Z",
+        "confidence": "high"
+      },
+      {
+        "source_type": "third_party_catalog",
+        "source_url": "https://designarena.ai/",
         "observed_at": "2026-07-08T12:00:00.000Z",
         "confidence": "high"
       }

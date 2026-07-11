@@ -13,6 +13,14 @@ import {
   usdPerMillionTokens
 } from "./shared";
 
+type DesignArenaEntry = {
+  arena?: unknown;
+  category?: unknown;
+  elo?: unknown;
+  win_rate?: unknown;
+  rank?: unknown;
+};
+
 type OpenRouterModel = {
   id: string;
   canonical_slug?: string | null;
@@ -33,6 +41,10 @@ type OpenRouterModel = {
   } | null;
   reasoning?: {
     mandatory?: boolean | null;
+  } | null;
+  benchmarks?: {
+    artificial_analysis?: Record<string, unknown> | null;
+    design_arena?: DesignArenaEntry[] | null;
   } | null;
   expiration_date?: string | null;
   [key: string]: unknown;
@@ -61,6 +73,43 @@ const provider: Provider = {
   },
   source_claims: []
 };
+
+function numericFields(values: Record<string, unknown> | null | undefined): Record<string, number> | null {
+  if (!values) {
+    return null;
+  }
+
+  const numeric: Record<string, number> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      numeric[key] = value;
+    }
+  }
+
+  return Object.keys(numeric).length > 0 ? numeric : null;
+}
+
+function designArenaEntries(entries: DesignArenaEntry[] | null | undefined): Array<{
+  arena: string | null;
+  category: string | null;
+  elo: number | null;
+  win_rate: number | null;
+  rank: number | null;
+}> | null {
+  if (!Array.isArray(entries)) {
+    return null;
+  }
+
+  const normalized = entries.map((entry) => ({
+    arena: typeof entry.arena === "string" ? entry.arena : null,
+    category: typeof entry.category === "string" ? entry.category : null,
+    elo: typeof entry.elo === "number" && Number.isFinite(entry.elo) ? entry.elo : null,
+    win_rate: typeof entry.win_rate === "number" && Number.isFinite(entry.win_rate) ? entry.win_rate : null,
+    rank: typeof entry.rank === "number" && Number.isFinite(entry.rank) ? entry.rank : null
+  }));
+
+  return normalized.length > 0 ? normalized : null;
+}
 
 function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, index: number): ModelOffering | null {
   const providerModelId = normalizeText(raw.id);
@@ -98,6 +147,23 @@ function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, inde
   const completionPrice = usdPerMillionTokens(raw.pricing?.completion);
   const isFree = promptPrice === 0 && completionPrice === 0;
   const pricingKind = isFree ? "free" : promptPrice === null || completionPrice === null ? "unknown" : "paid";
+  const artificialAnalysis = numericFields(raw.benchmarks?.artificial_analysis);
+  const designArena = designArenaEntries(raw.benchmarks?.design_arena);
+  const benchmarks = artificialAnalysis || designArena
+    ? {
+        math_score: artificialAnalysis?.math_index ?? null,
+        ttft_seconds: null,
+        artificial_analysis: artificialAnalysis,
+        design_arena: designArena
+      }
+    : null;
+  const artificialAnalysisFieldPaths = [
+    artificialAnalysis?.coding_index !== undefined ? "quality.coding_score" : null,
+    artificialAnalysis?.intelligence_index !== undefined ? "quality.reasoning_score" : null,
+    artificialAnalysis?.agentic_index !== undefined ? "quality.agentic_score" : null,
+    artificialAnalysis?.math_index !== undefined ? "quality.benchmarks.math_score" : null,
+    artificialAnalysis ? "quality.benchmarks.artificial_analysis" : null
+  ].filter((fieldPath): fieldPath is string => fieldPath !== null);
 
   return {
     id: `openrouter:${providerModelId}`,
@@ -110,7 +176,10 @@ function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, inde
     provider_model_id: providerModelId,
     canonical_model: {
       id: canonicalId,
-      confidence: normalizeText(raw.canonical_slug) ? "high" : "medium"
+      confidence: normalizeText(raw.canonical_slug) ? "high" : "medium",
+      knowledge_cutoff: null,
+      release_date: null,
+      open_weights: null
     },
     description,
     endpoint: {
@@ -150,9 +219,11 @@ function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, inde
       stale_after_seconds: 86400
     },
     quality: {
-      coding_score: null,
-      reasoning_score: null,
+      coding_score: artificialAnalysis?.coding_index ?? null,
+      reasoning_score: artificialAnalysis?.intelligence_index ?? null,
+      agentic_score: artificialAnalysis?.agentic_index ?? null,
       speed_score: null,
+      benchmarks,
       recommendation_notes: []
     },
     source_claims: [
@@ -175,7 +246,43 @@ function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, inde
           json_pointer: `/data/${index}`,
           provider_model_id: providerModelId
         }
-      })
+      }),
+      ...(artificialAnalysis
+        ? [
+            claim({
+              id: `openrouter:${providerModelId}:artificial-analysis:${index}`,
+              collector: "openrouter",
+              sourceType: "third_party_catalog",
+              sourceUrl: "https://artificialanalysis.ai/",
+              observedAt,
+              fieldPaths: artificialAnalysisFieldPaths,
+              confidence: "high",
+              rawReference: {
+                snapshot_id: "openrouter-live-response",
+                json_pointer: `/data/${index}/benchmarks/artificial_analysis`,
+                provider_model_id: providerModelId
+              }
+            })
+          ]
+        : []),
+      ...(designArena && designArena.length > 0
+        ? [
+            claim({
+              id: `openrouter:${providerModelId}:design-arena:${index}`,
+              collector: "openrouter",
+              sourceType: "third_party_catalog",
+              sourceUrl: "https://designarena.ai/",
+              observedAt,
+              fieldPaths: ["quality.benchmarks.design_arena"],
+              confidence: "high",
+              rawReference: {
+                snapshot_id: "openrouter-live-response",
+                json_pointer: `/data/${index}/benchmarks/design_arena`,
+                provider_model_id: providerModelId
+              }
+            })
+          ]
+        : [])
     ],
     policy: {
       visibility: "listed",

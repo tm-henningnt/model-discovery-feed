@@ -4,6 +4,12 @@ import type { FeedDocument, ModelOffering, Provider } from "../feed/schema";
 import { mergeCollectorFeed } from "./index";
 import { runCollectorsAndPublish, type PrismaPublishClient, type PrismaPublishTransaction } from "./publish";
 import type { Collector, CollectorContext, CollectorNotice } from "./types";
+import {
+  ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
+  ARTIFICIAL_ANALYSIS_SNAPSHOT_TYPE,
+  type ArtificialAnalysisResponse
+} from "../enrichers/artificial-analysis";
+import { MODELS_DEV_API_URL } from "../enrichers/models-dev";
 
 type FakeCollectorRun = {
   id: string;
@@ -20,12 +26,14 @@ type FakeSourceSnapshot = {
   sourceUrl: string | null;
   collector: string;
   observedAt: Date;
-  body: {
-    provider: Provider;
-    model_count: number;
-    notices: CollectorNotice[];
-    validation_error: string | null;
-  };
+  body:
+    | {
+        provider: Provider;
+        model_count: number;
+        notices: CollectorNotice[];
+        validation_error: string | null;
+      }
+    | Record<string, unknown>;
   collectorRunId: string;
 };
 
@@ -37,11 +45,18 @@ type FakeFeedRelease = {
   snapshotJson: FeedDocument;
 };
 
-function createContext(now: Date): CollectorContext {
+function createContext(
+  now: Date,
+  fetchImpl: typeof fetch = fetch,
+  env: Record<string, string | undefined> = {}
+): CollectorContext {
   return {
     now,
-    fetch,
-    env: {}
+    fetch: async (input, init) =>
+      String(input) === MODELS_DEV_API_URL
+        ? new Response("{}", { status: 200 })
+        : fetchImpl(input, init),
+    env
   };
 }
 
@@ -65,7 +80,10 @@ function cloneModel(id: string, provider: Provider): ModelOffering {
     provider_model_id: "test-model",
     canonical_model: {
       id: "test-model",
-      confidence: "high"
+      confidence: "high",
+      knowledge_cutoff: null,
+      release_date: null,
+      open_weights: null
     },
     endpoint: {
       ...structuredClone(exampleFeed.models[0].endpoint),
@@ -95,7 +113,10 @@ function createCollector(id: Collector["id"], provider: Provider, models: ModelO
   };
 }
 
-function createFakePrisma(initialFeedReleases: FakeFeedRelease[] = []): PrismaPublishClient & {
+function createFakePrisma(
+  initialFeedReleases: FakeFeedRelease[] = [],
+  initialSourceSnapshots: FakeSourceSnapshot[] = []
+): PrismaPublishClient & {
   state: {
     collectorRuns: FakeCollectorRun[];
     sourceSnapshots: FakeSourceSnapshot[];
@@ -105,7 +126,7 @@ function createFakePrisma(initialFeedReleases: FakeFeedRelease[] = []): PrismaPu
   let nextId = 0;
   const state = {
     collectorRuns: [] as FakeCollectorRun[],
-    sourceSnapshots: [] as FakeSourceSnapshot[],
+    sourceSnapshots: structuredClone(initialSourceSnapshots),
     feedReleases: structuredClone(initialFeedReleases)
   };
 
@@ -158,8 +179,66 @@ function createFakePrisma(initialFeedReleases: FakeFeedRelease[] = []): PrismaPu
 
   return {
     $transaction: transaction,
+    sourceSnapshot: {
+      async findFirst({ where }) {
+        return state.sourceSnapshots
+          .filter(
+            (snapshot) =>
+              snapshot.collector === where.collector && snapshot.sourceType === where.sourceType
+          )
+          .sort((left, right) => right.observedAt.getTime() - left.observedAt.getTime())[0] ?? null;
+      }
+    },
     state
   };
+}
+
+const artificialAnalysisPayload: ArtificialAnalysisResponse = {
+  status: "success",
+  data: [
+    {
+      id: "aa-gpt-oss-120b",
+      name: "gpt-oss-120b (low)",
+      slug: "gpt-oss-120b-low",
+      model_creator: { id: "openai", name: "OpenAI", slug: "openai" },
+      evaluations: {
+        artificial_analysis_intelligence_index: 63.25,
+        artificial_analysis_coding_index: 72.75,
+        artificial_analysis_math_index: 81.5,
+        mmlu_pro: 77.1
+      },
+      median_output_tokens_per_second: 500,
+      median_time_to_first_token_seconds: 0.12
+    }
+  ]
+};
+
+function artificialAnalysisModel(provider: Provider): ModelOffering {
+  const model = cloneModel(`${provider.id}:openai/gpt-oss-120b`, provider);
+  model.display_name = "GPT OSS 120B";
+  model.provider_model_id = "openai/gpt-oss-120b";
+  model.canonical_model = {
+    id: "openai/gpt-oss-120b",
+    confidence: "high",
+    knowledge_cutoff: null,
+    release_date: null,
+    open_weights: null
+  };
+  model.endpoint.model = "openai/gpt-oss-120b";
+  model.quality = {
+    coding_score: null,
+    reasoning_score: null,
+    agentic_score: null,
+    speed_score: null,
+    benchmarks: {
+      math_score: null,
+      ttft_seconds: null,
+      artificial_analysis: null,
+      design_arena: null
+    },
+    recommendation_notes: []
+  };
+  return model;
 }
 
 describe("runCollectorsAndPublish", () => {
@@ -211,6 +290,108 @@ describe("runCollectorsAndPublish", () => {
       sourceRevision: "collector-run-2026-07-08T12:34:56.000Z",
       snapshotJson: published
     });
+  });
+
+  it("persists the raw Artificial Analysis response in publish mode", async () => {
+    const now = new Date("2026-07-11T12:34:56.000Z");
+    const openrouterProvider = cloneProvider("openrouter", "OpenRouter");
+    const groqProvider = cloneProvider("groq", "Groq");
+    const aaFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(artificialAnalysisPayload), { status: 200 });
+    const prisma = createFakePrisma();
+
+    const published = await runCollectorsAndPublish({
+      context: createContext(now, aaFetch, { ARTIFICIALANALYSIS_API_KEY: "aa_test_key" }),
+      prisma,
+      collectors: [
+        createCollector("openrouter", openrouterProvider, [artificialAnalysisModel(openrouterProvider)]),
+        createCollector("groq", groqProvider, [artificialAnalysisModel(groqProvider)])
+      ]
+    });
+
+    expect(prisma.state.collectorRuns).toEqual(expect.arrayContaining([
+      expect.objectContaining({ collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID, status: "completed" })
+    ]));
+    expect(prisma.state.sourceSnapshots).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
+        sourceType: ARTIFICIAL_ANALYSIS_SNAPSHOT_TYPE,
+        observedAt: now,
+        body: artificialAnalysisPayload
+      })
+    ]));
+    expect(published.models.find((model) => model.id === "groq:openai/gpt-oss-120b")?.quality).toMatchObject({
+      coding_score: 72.75,
+      reasoning_score: 63.25,
+      speed_score: null,
+      benchmarks: { math_score: 81.5, ttft_seconds: null }
+    });
+    expect(
+      published.models
+        .find((model) => model.id === "groq:openai/gpt-oss-120b")
+        ?.source_claims.find((item) => item.field_paths.includes("quality.coding_score"))
+    ).toMatchObject({
+      collector: "score-propagation",
+      source_url: "https://artificialanalysis.ai/",
+      confidence: "medium",
+      raw_reference: {
+        canonical_model_id: "openai/gpt-oss-120b",
+        donor_offering_id: "openrouter:openai/gpt-oss-120b",
+        donor_claim_id: "artificial-analysis:openrouter:openai/gpt-oss-120b:0",
+        donor_raw_reference: expect.any(Object)
+      }
+    });
+    expect(published.models.every((model) => model.quality.speed_score === null)).toBe(true);
+    expect(
+      published.models.every(
+        (model) => model.quality.benchmarks !== null && model.quality.benchmarks.ttft_seconds === null
+      )
+    ).toBe(true);
+  });
+
+  it("loads the latest persisted AA snapshot after a publish-mode fetch failure", async () => {
+    const now = new Date("2026-07-20T12:34:56.000Z");
+    const snapshotObservedAt = new Date("2026-07-11T12:34:56.000Z");
+    const openrouterProvider = cloneProvider("openrouter", "OpenRouter");
+    const groqProvider = cloneProvider("groq", "Groq");
+    const failedFetch: typeof fetch = async () => new Response("upstream unavailable", { status: 503 });
+    const existingSnapshot: FakeSourceSnapshot = {
+      id: "aa-snapshot-existing",
+      sourceType: ARTIFICIAL_ANALYSIS_SNAPSHOT_TYPE,
+      sourceUrl: "https://artificialanalysis.ai/api/v2/data/llms/models",
+      collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
+      observedAt: snapshotObservedAt,
+      body: artificialAnalysisPayload as Record<string, unknown>,
+      collectorRunId: "aa-run-existing"
+    };
+    const prisma = createFakePrisma([], [existingSnapshot]);
+
+    const published = await runCollectorsAndPublish({
+      context: createContext(now, failedFetch, { ARTIFICIALANALYSIS_API_KEY: "aa_test_key" }),
+      prisma,
+      collectors: [
+        createCollector("openrouter", openrouterProvider, [artificialAnalysisModel(openrouterProvider)]),
+        createCollector("groq", groqProvider, [artificialAnalysisModel(groqProvider)])
+      ]
+    });
+
+    const model = published.models.find((candidate) => candidate.id === "groq:openai/gpt-oss-120b");
+    expect(model?.quality.coding_score).toBe(72.75);
+    expect(model?.source_claims).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        collector: "score-propagation",
+        observed_at: snapshotObservedAt.toISOString(),
+        raw_reference: expect.objectContaining({
+          canonical_model_id: "openai/gpt-oss-120b",
+          donor_offering_id: "openrouter:openai/gpt-oss-120b"
+        })
+      })
+    ]));
+    expect(published.notices).toEqual(expect.arrayContaining([
+      expect.objectContaining({ message: "Artificial Analysis API unavailable", used_snapshot: true }),
+      expect.objectContaining({ message: "Artificial Analysis snapshot is more than 7 days old" })
+    ]));
+    expect(prisma.state.sourceSnapshots).toHaveLength(3);
   });
 
   it("creates no published release when feed validation fails", async () => {

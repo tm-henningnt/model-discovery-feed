@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EXPORT_PRESETS } from "./export-presets";
 import {
+  escapeMarkdownTableCell,
   escapeRowSeparator,
   parseRowSeparator,
   renderExport,
@@ -8,6 +9,7 @@ import {
   type ExportTemplate
 } from "./export-template";
 import { exampleFeed } from "./fixture";
+import { rankByProfile } from "./ranking";
 
 const template = (rowTemplate: string, wrapperTemplate = "{{rows}}", rowSeparator = ""): ExportTemplate => ({
   name: "Test template",
@@ -128,8 +130,117 @@ describe("renderExport", () => {
     expect(EXPORT_PRESETS.map((preset) => preset.id)).toEqual([
       "preset-cline-cc",
       "preset-json-array",
-      "preset-csv"
+      "preset-csv",
+      "preset-delegation-table",
+      "preset-best-coder",
+      "preset-best-agentic",
+      "preset-fastest-coder",
+      "preset-best-value-coder",
+      "preset-best-free-coder"
     ]);
+  });
+
+  describe("delegation-table preset (AC-008)", () => {
+    const preset = EXPORT_PRESETS.find((p) => p.id === "preset-delegation-table")!;
+
+    it("renders a golden GFM table with verbatim scores, a $0.00 free price, and em-dash nulls", () => {
+      const output = renderExport(preset, cloneModels());
+
+      expect(output).toBe(
+        "| Model | Provider | Coding | Reasoning | Agentic | Speed | Context | $/1M (blended) |\n" +
+          "| --- | --- | --- | --- | --- | --- | --- | --- |\n" +
+          "| openrouter:qwen/qwen3-coder:free | OpenRouter | 71.4 | 51.2 | 45.6 | 245 t/s | 262K | $0.00 |\n" +
+          "| groq:openai/gpt-oss-120b | Groq | — | — | — | — | 131K | — |\n" +
+          "\n" +
+          "_Scores by [Artificial Analysis](https://artificialanalysis.ai/)._"
+      );
+    });
+
+    it("escapes a pipe in the provider name so the table structure survives", () => {
+      const models = cloneModels();
+      models[0].provider = { id: "openrouter", name: "Weird | Provider" };
+
+      const output = renderExport(preset, [models[0]]);
+      const firstDataRow = output.split("\n")[2];
+
+      expect(firstDataRow).toContain("Weird \\| Provider");
+      // Splitting on an UNESCAPED pipe still yields exactly 10 segments
+      // (8 columns + 2 boundary empties from the leading/trailing "|"); an
+      // unescaped "|" in the field would add an extra, breaking the table.
+      expect(firstDataRow.split(/(?<!\\)\|/)).toHaveLength(10);
+    });
+
+    it("collapses a newline injected into the provider name so the row count is unaffected", () => {
+      const models = cloneModels();
+      models[0].provider = { id: "openrouter", name: "Injected\nRow" };
+
+      const output = renderExport(preset, [models[0]]);
+
+      // Header + separator + exactly ONE data row for the one offering + the
+      // blank line + attribution note. An unescaped newline would insert an
+      // extra line, splitting the row in two.
+      expect(output.split("\n")).toHaveLength(5);
+      expect(output).toContain("Injected Row");
+      expect(output).not.toContain("Injected\nRow");
+    });
+
+    it("renders an unknown/missing price as an em-dash, not $NaN or $Infinity", () => {
+      const model = cloneModels()[0];
+      model.pricing.kind = "paid";
+      model.pricing.free = null;
+      model.pricing.input_usd_per_1m_tokens = null;
+      model.pricing.output_usd_per_1m_tokens = null;
+
+      const output = renderExport(preset, [model]);
+      expect(output.split("\n")[2]).toContain("| — |");
+      expect(output).not.toContain("NaN");
+      expect(output).not.toContain("Infinity");
+    });
+  });
+
+  describe("escapeMarkdownTableCell", () => {
+    it("escapes backslashes before pipes so escaping is unambiguous to reverse", () => {
+      expect(escapeMarkdownTableCell("a|b")).toBe("a\\|b");
+      expect(escapeMarkdownTableCell("a\\b")).toBe("a\\\\b");
+      expect(escapeMarkdownTableCell("a\\|b")).toBe("a\\\\\\|b");
+    });
+
+    it("collapses embedded newlines so a table row can't be split in two", () => {
+      expect(escapeMarkdownTableCell("a\nb")).toBe("a b");
+      expect(escapeMarkdownTableCell("a\r\nb")).toBe("a b");
+      expect(escapeMarkdownTableCell("a\rb")).toBe("a b");
+      expect(escapeMarkdownTableCell("a|b\nc")).toBe("a\\|b c");
+    });
+  });
+
+  describe("profile export presets", () => {
+    it("best-value-coder excludes free/unpriced offerings, matching the ranking profile's rule", () => {
+      const preset = EXPORT_PRESETS.find((p) => p.id === "preset-best-value-coder")!;
+      const models = cloneModels(); // includes the free qwen3-coder offering
+
+      const ranked = rankByProfile(models, "best-value-coder");
+      expect(ranked).toHaveLength(0); // neither fixture offering is paid with known pricing
+
+      const output = renderExport(preset, ranked);
+      // Header + separator + (empty rows placeholder leaves a blank line) +
+      // blank + attribution note — no actual data row present.
+      expect(output.split("\n")).toEqual([
+        "| Model | Provider | Coding | Reasoning | Agentic | Speed | Context | $/1M (blended) |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "",
+        "",
+        "_Scores by [Artificial Analysis](https://artificialanalysis.ai/)._"
+      ]);
+    });
+
+    it("fastest-coder excludes offerings without a coding floor or a speed measurement", () => {
+      const models = cloneModels();
+      const ranked = rankByProfile(models, "fastest-coder");
+
+      // The scored fixture model (coding 71.4, speed 245) clears the floor;
+      // the unscored one has neither.
+      expect(ranked.map((m) => m.id)).toEqual(["openrouter:qwen/qwen3-coder:free"]);
+    });
   });
 
   it("slugifies strings the same way the slug filter does", () => {

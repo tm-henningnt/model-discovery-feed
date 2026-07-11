@@ -151,6 +151,42 @@
   color: var(--muted);
 }
 
+.sources {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.sourceList {
+  list-style: none;
+  padding: 0;
+}
+
+.sourceRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--step-sm);
+}
+
+.sourceRow > :first-child {
+  min-width: 12rem;
+  color: var(--brand-ink);
+  font-weight: 600;
+}
+
+.sourceRow > :last-child {
+  color: var(--muted);
+}
+
+.sourcesEmpty {
+  color: var(--muted);
+  font-size: var(--step-sm);
+}
+
 .prose {
   padding-bottom: 2rem;
 }

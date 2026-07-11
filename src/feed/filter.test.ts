@@ -31,6 +31,38 @@ describe("filterModels", () => {
     ]);
   });
 
+  it("resolves each quality delegation profile", () => {
+    const feed = structuredClone(exampleFeed);
+    const paidCandidate = structuredClone(feed.models[0]);
+    paidCandidate.id = "openrouter:paid-agentic-coder";
+    paidCandidate.display_name = "Paid Agentic Coder";
+    paidCandidate.provider_model_id = "paid-agentic-coder";
+    paidCandidate.canonical_model!.id = "openrouter/paid-agentic-coder";
+    paidCandidate.pricing = {
+      ...paidCandidate.pricing,
+      kind: "paid",
+      input_usd_per_1m_tokens: 1,
+      output_usd_per_1m_tokens: 1,
+      free: null
+    };
+    paidCandidate.quality = {
+      ...paidCandidate.quality,
+      coding_score: 60,
+      agentic_score: 90,
+      speed_score: 100
+    };
+    feed.models = [feed.models[0], paidCandidate];
+
+    expect(filterModels(feed, { profile: "best-coder" }).map((model) => model.id)).toEqual([
+      "openrouter:qwen/qwen3-coder:free"
+    ]);
+    expect(filterModels(feed, { profile: "best-agentic" }).map((model) => model.id)).toEqual([paidCandidate.id]);
+    expect(filterModels(feed, { profile: "fastest-coder" }).map((model) => model.id)).toEqual([
+      "openrouter:qwen/qwen3-coder:free"
+    ]);
+    expect(filterModels(feed, { profile: "best-value-coder" }).map((model) => model.id)).toEqual([paidCandidate.id]);
+  });
+
   it("returns no results for an unknown profile", () => {
     expect(filterModels(exampleFeed, { profile: "missing" })).toEqual([]);
   });

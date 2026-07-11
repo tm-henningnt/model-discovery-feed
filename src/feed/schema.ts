@@ -125,7 +125,10 @@ export const modelOfferingSchema = z
     canonical_model: z
       .object({
         id: z.string().min(1),
-        confidence: confidenceSchema
+        confidence: confidenceSchema,
+        knowledge_cutoff: z.string().date().nullable(),
+        release_date: z.string().date().nullable(),
+        open_weights: z.boolean().nullable()
       })
       .nullable(),
     description: z.string().nullable(),
@@ -178,12 +181,61 @@ export const modelOfferingSchema = z
       .passthrough(),
     quality: z
       .object({
-        coding_score: z.number().nullable(),
-        reasoning_score: z.number().nullable(),
-        speed_score: z.number().nullable(),
+        coding_score: z
+          .number()
+          .nullable()
+          .describe("Artificial Analysis coding index, 0–100, stored verbatim."),
+        reasoning_score: z
+          .number()
+          .nullable()
+          .describe("Artificial Analysis intelligence index, 0–100, stored verbatim."),
+        agentic_score: z
+          .number()
+          .nullable()
+          .describe("Artificial Analysis agentic index, 0–100, stored verbatim."),
+        speed_score: z
+          .number()
+          .nullable()
+          .describe("Artificial Analysis median output speed in tokens/sec, stored verbatim."),
+        benchmarks: z
+          .object({
+            math_score: z
+              .number()
+              .nullable()
+              .optional()
+              .describe("Artificial Analysis math index, 0–100, stored verbatim."),
+            ttft_seconds: z
+              .number()
+              .nonnegative()
+              .nullable()
+              .optional()
+              .describe("Artificial Analysis median time to first token in seconds, stored verbatim."),
+            artificial_analysis: z
+              .record(z.number())
+              .nullable()
+              .optional()
+              .describe("Artificial Analysis sub-benchmark scores, stored verbatim."),
+            design_arena: z
+              .array(
+                z
+                  .object({
+                    arena: z.string().nullable().optional(),
+                    category: z.string().nullable().optional(),
+                    elo: z.number().nullable().optional(),
+                    rank: z.number().nullable().optional(),
+                    win_rate: z.number().nullable().optional()
+                  })
+                  .passthrough()
+              )
+              .nullable()
+              .optional()
+              .describe("Design Arena ratings, stored verbatim.")
+          })
+          .passthrough()
+          .nullable(),
         recommendation_notes: z.array(z.string())
-    })
-    .passthrough(),
+      })
+      .passthrough(),
     source_claims: z
       .array(sourceClaimSchema)
       .min(1, { message: "model offerings must include at least one source claim" }),
@@ -236,7 +288,18 @@ export const feedDocumentSchema = z
     providers: z.array(providerSchema),
     models: z.array(modelOfferingSchema),
     profiles: z.array(profileSchema),
-    notices: z.array(z.record(z.unknown()))
+    notices: z.array(z.record(z.unknown())),
+    attributions: z
+      .array(
+        z
+          .object({
+            source: z.string().min(1),
+            url: z.string().url(),
+            notice: z.string().min(1)
+          })
+          .passthrough()
+      )
+      .default([])
   })
   .passthrough()
   .superRefine((feed, ctx) => {

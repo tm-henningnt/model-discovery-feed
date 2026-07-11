@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { loadFeed } from "../lib/feed-data";
+import { safeHttpUrl } from "../lib/format";
 import { DocsNav } from "./DocsNav";
 import { DOCS } from "./docs";
 import styles from "./docs.module.css";
@@ -9,7 +11,11 @@ export const metadata: Metadata = {
   description: "Contract, integration guide, and reference for the Model Discovery Feed."
 };
 
-export default function DocsIndex() {
+export const dynamic = "force-dynamic";
+
+export default async function DocsIndex() {
+  const { feed } = await loadFeed();
+
   return (
     <div className={`page ${styles.shell}`}>
       <DocsNav />
@@ -48,6 +54,33 @@ export default function DocsIndex() {
             </a>
             <span>The current feed snapshot as served by this deployment.</span>
           </div>
+        </section>
+
+        <section className={styles.sources} aria-labelledby="data-sources-title">
+          <h2 id="data-sources-title" className={styles.refsTitle}>
+            Data sources &amp; attribution
+          </h2>
+          {feed.attributions.length === 0 ? (
+            <p className={styles.sourcesEmpty}>The current feed snapshot does not include data-source attributions.</p>
+          ) : (
+            <ul className={styles.sourceList}>
+              {feed.attributions.map((attribution) => {
+                const url = safeHttpUrl(attribution.url);
+                return (
+                  <li key={`${attribution.source}-${attribution.url}`} className={styles.sourceRow}>
+                    {url ? (
+                      <a href={url} target="_blank" rel="noreferrer">
+                        {attribution.source}
+                      </a>
+                    ) : (
+                      <span>{attribution.source}</span>
+                    )}
+                    <span>{attribution.notice}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       </div>
     </div>

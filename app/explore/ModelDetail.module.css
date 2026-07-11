@@ -142,6 +142,80 @@
   gap: 0.55rem;
 }
 
+.qualityCredit {
+  color: var(--muted);
+  font-size: var(--step-xs);
+  margin-bottom: 0.2rem;
+}
+
+.qualityCredit a {
+  color: var(--brand-ink);
+  font-weight: 600;
+}
+
+.qualityGroup,
+.benchmarkGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding-top: 0.7rem;
+}
+
+.benchmarkGroup {
+  margin-top: 0.45rem;
+  border-top: 1px solid var(--border);
+}
+
+.benchmarkTitle {
+  color: var(--ink-2);
+  font-size: var(--step-sm);
+  font-weight: 600;
+}
+
+.qualityMetric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.qualitySource {
+  margin-left: 11rem;
+  color: var(--muted);
+  font-size: var(--step-xs);
+  line-height: 1.4;
+}
+
+.qualitySource a {
+  color: var(--brand-ink);
+}
+
+.subBenchmarkList,
+.arenaEntries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.arenaEntry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--surface);
+}
+
+.arenaTitle {
+  color: var(--ink);
+  font-size: var(--step-sm);
+  font-weight: 600;
+}
+
+.arenaEntry .qualitySource {
+  margin-left: 0;
+}
+
 .field {
   display: grid;
   grid-template-columns: 10rem minmax(0, 1fr);
@@ -254,5 +328,9 @@
 
   .fieldLabel {
     font-size: var(--step-xs);
+  }
+
+  .qualitySource {
+    margin-left: 0;
   }
 }

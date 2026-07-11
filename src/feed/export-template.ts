@@ -1,5 +1,21 @@
-import { formatTokens } from "./format";
+import { formatScore, formatSpeed, formatTokens } from "./format";
+import { blendedPricePer1M } from "./ranking";
 import type { ModelOffering } from "./schema";
+
+// Computed fields no ordinary model path expresses: derived pricing and
+// display-formatted scores. Resolved before the generic path-based lookup so
+// existing presets (which only ever reference real model paths) are
+// unaffected.
+const VIRTUAL_FIELDS: Record<string, (model: ModelOffering) => string> = {
+  _coding_score: (model) => formatScore(model.quality.coding_score),
+  _reasoning_score: (model) => formatScore(model.quality.reasoning_score),
+  _agentic_score: (model) => formatScore(model.quality.agentic_score),
+  _speed_score: (model) => formatSpeed(model.quality.speed_score),
+  _blended_price_per_1m: (model) => {
+    const price = blendedPricePer1M(model);
+    return Number.isFinite(price) ? `$${price.toFixed(2)}` : "—";
+  }
+};
 
 export type ExportTemplate = {
   name: string;
@@ -59,11 +75,24 @@ function applyFilter(value: string, filter: string): string {
   return value;
 }
 
+// GFM table cells break on an unescaped "|"; escape it (and any literal
+// backslash first, so escaping is unambiguous to reverse) rather than the
+// generic JSON-string escaping renderRow applies to non-raw fields, which
+// would add spurious backslashes before quotes that don't need escaping in
+// Markdown.
+export function escapeMarkdownTableCell(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/\r\n|\r|\n/g, " ");
+}
+
 function renderRow(rowTemplate: string, model: ModelOffering): string {
   return rowTemplate.replace(/\{\{([^{}]*)\}\}/g, (_placeholder, expression: string) => {
     const [path, ...filters] = expression.split("|").map((part) => part.trim());
-    let value = stringifyValue(resolvePath(model, path));
-    let isRaw = false;
+    const virtual = VIRTUAL_FIELDS[path];
+    let value = virtual ? virtual(model) : stringifyValue(resolvePath(model, path));
+    let isRaw = Boolean(virtual);
 
     for (const filter of filters) {
       if (filter === "raw") {
@@ -72,6 +101,10 @@ function renderRow(rowTemplate: string, model: ModelOffering): string {
         // csv implies raw: RFC-4180 quote doubling instead of JSON escaping.
         isRaw = true;
         value = value.replace(/"/g, '""');
+      } else if (filter === "md") {
+        // md implies raw: GFM pipe escaping instead of JSON escaping.
+        isRaw = true;
+        value = escapeMarkdownTableCell(value);
       } else {
         value = applyFilter(value, filter);
       }

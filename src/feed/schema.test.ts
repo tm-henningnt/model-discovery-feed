@@ -28,6 +28,17 @@ ajv.addFormat("date-time", {
     return !Number.isNaN(Date.parse(value));
   }
 });
+ajv.addFormat("date", {
+  type: "string",
+  validate(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }
+});
 const validateFeedJsonSchema = ajv.compile(feedJsonSchema);
 const publicFixturesUrl = new URL("../../docs/public/fixtures/", import.meta.url);
 
@@ -38,6 +49,62 @@ describe("feed schema", () => {
     const feed = validateFeedDocument(exampleFeed);
     expect(feed.schema_version).toBe("1.0.0");
     expect(feed.models.length).toBeGreaterThan(0);
+  });
+
+  it("accepts a rich quality object in both schemas", () => {
+    const rich = cloneExampleFeed();
+    rich.models[0] = {
+      ...rich.models[0],
+      quality: {
+        ...rich.models[0].quality,
+        agentic_score: 45.6,
+        benchmarks: {
+          math_score: 62.1,
+          ttft_seconds: 0.31,
+          artificial_analysis: { mmlu_pro: 0.78, gpqa: 0.61 },
+          design_arena: [
+            { arena: "overall", category: "general", elo: 1123, rank: 14, win_rate: 0.52 }
+          ]
+        }
+      }
+    };
+
+    expect(() => validateFeedDocument(rich)).not.toThrow();
+    expect(validateFeedJsonSchema(rich)).toBe(true);
+  });
+
+  it("rejects negative TTFT values in both schemas", () => {
+    const invalid = cloneExampleFeed();
+    invalid.models[0] = {
+      ...invalid.models[0],
+      quality: {
+        ...invalid.models[0].quality,
+        benchmarks: { ttft_seconds: -0.01 }
+      }
+    };
+
+    expect(() => validateFeedDocument(invalid)).toThrow(/greater than or equal to/i);
+    expect(validateFeedJsonSchema(invalid)).toBe(false);
+  });
+
+  it("includes the required attributions on the fixture feed", () => {
+    expect((exampleFeed as unknown as { attributions?: unknown }).attributions).toEqual([
+      {
+        source: "Artificial Analysis",
+        url: "https://artificialanalysis.ai/",
+        notice: "Model quality and performance scores by Artificial Analysis."
+      },
+      {
+        source: "models.dev",
+        url: "https://models.dev/",
+        notice: "Model metadata from models.dev (MIT)."
+      },
+      {
+        source: "Design Arena",
+        url: "https://designarena.ai/",
+        notice: "Design Arena Elo ratings."
+      }
+    ]);
   });
 
   it("rejects free offerings without free metadata", () => {

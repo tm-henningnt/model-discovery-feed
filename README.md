@@ -26,7 +26,7 @@ npm run dev
 - `GET /v1/schema`
 - `GET /v1/feed`
 - `GET /v1/status`
-- `GET /v1/models`
+- `GET /v1/models` — supports `?profile=` for a named delegation profile (`best-coder`, `best-agentic`, `fastest-coder`, `best-value-coder`, `best-free-coder`) alongside the usual additive filters
 - `GET /v1/models/{id}`
 - `GET /v1/providers`
 
@@ -41,7 +41,11 @@ npm run dev
 
 ```bash
 npm run model-feed -- list --feed https://example.com/v1/feed --capability coding --json
+npm run model-feed -- list --feed https://example.com/v1/feed --profile best-coder --json
 ```
+
+The explorer's Export drawer also ships built-in export presets for each delegation profile,
+rendering the current selection as a ready-to-paste Markdown delegation table.
 
 ## Security
 

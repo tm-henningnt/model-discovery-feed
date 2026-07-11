@@ -113,7 +113,10 @@ function normalizeGroqModel(raw: GroqModel, observedAt: string, index: number): 
     provider_model_id: providerModelId,
     canonical_model: {
       id: providerModelId,
-      confidence: "medium"
+      confidence: "medium",
+      knowledge_cutoff: null,
+      release_date: null,
+      open_weights: null
     },
     description,
     endpoint: {
@@ -155,7 +158,9 @@ function normalizeGroqModel(raw: GroqModel, observedAt: string, index: number): 
     quality: {
       coding_score: null,
       reasoning_score: null,
+      agentic_score: null,
       speed_score: null,
+      benchmarks: null,
       recommendation_notes: []
     },
     source_claims: [

@@ -1,6 +1,8 @@
 import { validateFeedDocument } from "../src/feed/schema";
 import { getFixtureFeed, mergeCollectorFeed, runCollectors } from "../src/collectors";
 import { runCollectorsAndPublish, type PrismaPublishClient } from "../src/collectors/publish";
+import { clearArtificialAnalysisEndpointScores } from "../src/enrichers/artificial-analysis";
+import { enrichModels } from "../src/enrichers/pipeline";
 import { getPrismaClient } from "../src/server/prisma";
 
 async function main(): Promise<void> {
@@ -32,7 +34,18 @@ async function main(): Promise<void> {
   }
 
   const { providers, models, notices } = await runCollectors(context);
-  const feed = mergeCollectorFeed(getFixtureFeed(), providers, models, notices, now);
+  const enriched = await enrichModels(models, context);
+  const mergedFeed = mergeCollectorFeed(
+    getFixtureFeed(),
+    providers,
+    enriched.models,
+    [...notices, ...enriched.notices],
+    now
+  );
+  const feed = {
+    ...mergedFeed,
+    models: mergedFeed.models.map(clearArtificialAnalysisEndpointScores)
+  };
   const validated = validateFeedDocument(feed);
 
   process.stdout.write(`${JSON.stringify(validated, null, 2)}\n`);

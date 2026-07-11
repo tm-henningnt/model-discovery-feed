@@ -1,4 +1,5 @@
 import { isConfidentlyFree } from "./classification";
+import { selectDelegationProfile } from "./ranking";
 import type { FeedDocument, ModelOffering, PricingKind } from "./schema";
 
 export type ModelFilters = {
@@ -36,9 +37,7 @@ export function filtersFromSearchParams(params: URLSearchParams): ModelFilters {
 }
 
 export function filterModels(feed: FeedDocument, filters: ModelFilters, now = new Date()): ModelOffering[] {
-  const profileOfferingId = filters.profile
-    ? feed.profiles.find((profile) => profile.id === filters.profile)?.selection.model_offering_id
-    : undefined;
+  const profileOfferingId = filters.profile ? selectDelegationProfile(feed, filters.profile, now)?.id : undefined;
 
   return feed.models.filter((model) => {
     if (filters.free !== undefined) {

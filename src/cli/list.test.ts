@@ -23,6 +23,17 @@ describe("cli list", () => {
     expect(USAGE).toContain("model-feed [list] [options]");
   });
 
+  it("parses delegation profile selection", () => {
+    expect(parseCliArgs(["list", "--profile", "best-coder"])).toEqual({
+      kind: "list",
+      options: {
+        feedUrl: "http://localhost:3000/v1/feed",
+        json: false,
+        profile: "best-coder"
+      }
+    });
+  });
+
   it("sends If-None-Match and Authorization headers when supplied", async () => {
     process.env.MODEL_FEED_API_KEY = "env-token";
 
@@ -137,6 +148,18 @@ describe("cli list", () => {
             source_url: "https://openrouter.ai/api/v1/models",
             observed_at: "2026-07-08T12:00:00.000Z",
             confidence: "high"
+          },
+          {
+            source_type: "third_party_catalog",
+            source_url: "https://artificialanalysis.ai/",
+            observed_at: "2026-07-08T12:00:00.000Z",
+            confidence: "high"
+          },
+          {
+            source_type: "third_party_catalog",
+            source_url: "https://designarena.ai/",
+            observed_at: "2026-07-08T12:00:00.000Z",
+            confidence: "high"
           }
         ]
       },
@@ -186,7 +209,13 @@ describe("cli list", () => {
         id: "zzz:example-free-model",
         display_name: "Zeta Free",
         provider_model_id: "zeta-free",
-        canonical_model: { id: "zeta-free", confidence: "high" },
+        canonical_model: {
+          id: "zeta-free",
+          confidence: "high",
+          knowledge_cutoff: null,
+          release_date: null,
+          open_weights: null
+        },
         pricing: {
           ...feed.models[0].pricing,
           free: {
@@ -204,7 +233,13 @@ describe("cli list", () => {
         id: "aaa:example-free-model",
         display_name: "Alpha Free",
         provider_model_id: "alpha-free",
-        canonical_model: { id: "alpha-free", confidence: "high" },
+        canonical_model: {
+          id: "alpha-free",
+          confidence: "high",
+          knowledge_cutoff: null,
+          release_date: null,
+          open_weights: null
+        },
         pricing: {
           ...feed.models[0].pricing,
           free: {

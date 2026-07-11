@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTokens, safeHttpUrl } from "./format";
+import { formatScore, formatSpeed, formatTokens, safeHttpUrl } from "./format";
 
 describe("formatTokens", () => {
   const cases: [number | null | undefined, string][] = [
@@ -45,5 +45,17 @@ describe("safeHttpUrl", () => {
   it("rejects null/undefined", () => {
     expect(safeHttpUrl(null)).toBeNull();
     expect(safeHttpUrl(undefined)).toBeNull();
+  });
+});
+
+describe("quality score formatting", () => {
+  it("preserves published score units and marks unavailable scores", () => {
+    expect(formatScore(71.4)).toBe("71.4");
+    expect(formatScore(null)).toBe("—");
+  });
+
+  it("adds the speed unit only for a known speed", () => {
+    expect(formatSpeed(245)).toBe("245 t/s");
+    expect(formatSpeed(null)).toBe("—");
   });
 });
