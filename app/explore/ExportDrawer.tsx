@@ -216,7 +216,7 @@ export function ExportDrawer({ models, onClose }: Props) {
             <details className={styles.reference}>
               <summary>Placeholder reference</summary>
               <div className={styles.referenceBody}>
-                <p className={styles.referenceGroup}>Dot-path examples</p>
+                <p className={styles.referenceGroup}>Identity</p>
                 <ul className={styles.referenceList}>
                   <li>
                     <code className="mono">{"{{id}}"}</code> — offering id
@@ -225,22 +225,64 @@ export function ExportDrawer({ models, onClose }: Props) {
                     <code className="mono">{"{{display_name}}"}</code> — display name
                   </li>
                   <li>
-                    <code className="mono">{"{{provider.id}}"}</code> — provider id
+                    <code className="mono">{"{{description}}"}</code> — description
+                  </li>
+                  <li>
+                    <code className="mono">{"{{provider.id}}"}</code> · <code className="mono">{"{{provider.name}}"}</code> — provider
                   </li>
                   <li>
                     <code className="mono">{"{{provider_model_id}}"}</code> — provider's model id
                   </li>
                   <li>
-                    <code className="mono">{"{{limits.context_tokens}}"}</code> — context window, in tokens
+                    <code className="mono">{"{{canonical_model.id}}"}</code> · <code className="mono">{"{{canonical_model.confidence}}"}</code> — cross-provider identity
+                  </li>
+                </ul>
+                <p className={styles.referenceGroup}>Capabilities &amp; limits</p>
+                <ul className={styles.referenceList}>
+                  <li>
+                    <code className="mono">{"{{capabilities}}"}</code> — capability array (JSON) · <code className="mono">{"{{_capabilities}}"}</code> — joined (e.g. chat/coding)
                   </li>
                   <li>
-                    <code className="mono">{"{{pricing.kind}}"}</code> — pricing category
-                  </li>
-                  <li>
-                    <code className="mono">{"{{pricing.free.confidence}}"}</code> — confidence of the free-tier claim
+                    <code className="mono">{"{{limits.context_tokens}}"}</code> · <code className="mono">{"{{limits.max_output_tokens}}"}</code> — token limits
                   </li>
                   <li>
                     <code className="mono">{"{{availability.status}}"}</code> — availability status
+                  </li>
+                  <li>
+                    <code className="mono">{"{{policy.tags}}"}</code> · <code className="mono">{"{{policy.recommended_for_agentic_workflows}}"}</code>
+                  </li>
+                </ul>
+                <p className={styles.referenceGroup}>Pricing</p>
+                <ul className={styles.referenceList}>
+                  <li>
+                    <code className="mono">{"{{pricing.kind}}"}</code> — free / free_tier / subscription_included / paid …
+                  </li>
+                  <li>
+                    <code className="mono">{"{{pricing.input_usd_per_1m_tokens}}"}</code> · <code className="mono">{"{{pricing.output_usd_per_1m_tokens}}"}</code>
+                  </li>
+                  <li>
+                    <code className="mono">{"{{pricing.subscription.quota_multiplier_vs_payg}}"}</code> — ClinePass quota multiplier
+                  </li>
+                  <li>
+                    <code className="mono">{"{{pricing.free.quota}}"}</code> · <code className="mono">{"{{pricing.free.confidence}}"}</code> · <code className="mono">{"{{pricing.free.last_verified_at}}"}</code>
+                  </li>
+                </ul>
+                <p className={styles.referenceGroup}>Computed fields</p>
+                <ul className={styles.referenceList}>
+                  <li>
+                    <code className="mono">{"{{_delegation_guidance}}"}</code> — one-line briefing (pricing, ctx, scores, price, caps, notes)
+                  </li>
+                  <li>
+                    <code className="mono">{"{{_coding_score}}"}</code> · <code className="mono">{"{{_reasoning_score}}"}</code> · <code className="mono">{"{{_agentic_score}}"}</code> · <code className="mono">{"{{_speed_score}}"}</code> — display-formatted
+                  </li>
+                  <li>
+                    <code className="mono">{"{{_blended_price_per_1m}}"}</code> — blended $/1M (0.75·in + 0.25·out)
+                  </li>
+                  <li>
+                    <code className="mono">{"{{_recommendation}}"}</code> — recommendation notes, joined
+                  </li>
+                  <li>
+                    <code className="mono">{"{{quality.coding_score}}"}</code> — raw score (unformatted); same for reasoning/agentic/speed
                   </li>
                 </ul>
                 <p className={styles.referenceGroup}>Filters</p>
@@ -255,11 +297,18 @@ export function ExportDrawer({ models, onClose }: Props) {
                     <code className="mono">|tokens</code> — formats a token count (e.g. 128K)
                   </li>
                   <li>
+                    <code className="mono">|md</code> — escape for a Markdown table cell
+                  </li>
+                  <li>
+                    <code className="mono">|csv</code> — escape for a CSV cell
+                  </li>
+                  <li>
                     <code className="mono">|raw</code> — skip JSON-escaping the value
                   </li>
                 </ul>
                 <p className={styles.referenceNote}>
-                  Values are JSON-escaped unless the <code className="mono">|raw</code> filter is used.
+                  Values are JSON-escaped unless the <code className="mono">|raw</code> filter is used. Computed
+                  (<code className="mono">_</code>-prefixed) fields are emitted raw and pre-sanitized.
                 </p>
               </div>
             </details>

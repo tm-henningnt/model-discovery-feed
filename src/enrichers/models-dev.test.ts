@@ -36,8 +36,47 @@ const capturedPayloadExcerpt = {
         cost: { input: 1.25, output: 1 }
       }
     }
+  },
+  "opencode-go": {
+    models: {
+      "minimax-m3": {
+        id: "minimax-m3",
+        name: "MiniMax M3",
+        reasoning: true,
+        tool_call: true,
+        limit: { context: 1_000_000, output: 131_072 },
+        cost: { input: 0.3, output: 1.2, cache_read: 0.06 }
+      }
+    }
+  },
+  opencode: {
+    models: {
+      "deepseek-v4-flash-free": {
+        id: "deepseek-v4-flash-free",
+        name: "DeepSeek V4 Flash Free",
+        reasoning: true,
+        tool_call: true,
+        limit: { context: 200_000, output: 128_000 },
+        cost: { input: 0, output: 0 }
+      }
+    }
   }
 } satisfies ModelsDevResponse;
+
+function nullPricedOffering(providerId: string, providerModelId: string): ModelOffering {
+  const model = offering(providerId, providerModelId);
+  model.capabilities = ["chat", "streaming"];
+  model.limits = { context_tokens: null, max_output_tokens: null };
+  model.pricing = {
+    kind: "unknown",
+    input_usd_per_1m_tokens: null,
+    output_usd_per_1m_tokens: null,
+    currency: null,
+    metering: "tokens",
+    free: null
+  };
+  return model;
+}
 
 function context(fetchImpl: typeof fetch, now = "2026-07-11T12:00:00.000Z"): CollectorContext {
   return {
@@ -68,6 +107,15 @@ describe("enrichWithModelsDev", () => {
     const gemini = offering("gemini", "gemini-2.5-pro");
     gemini.capabilities = ["chat"];
     gemini.limits = { context_tokens: null, max_output_tokens: null };
+    // Non-null pricing matching the fixture so the pricing gap-fill is a no-op here — this test is
+    // about capability/limit/canonical fill (pricing fill is covered separately below).
+    gemini.pricing = {
+      ...gemini.pricing,
+      kind: "paid",
+      input_usd_per_1m_tokens: 1.25,
+      output_usd_per_1m_tokens: 10,
+      currency: "USD"
+    };
     let fetchCount = 0;
     const successfulFetch: typeof fetch = async (input) => {
       fetchCount += 1;
@@ -164,6 +212,102 @@ describe("enrichWithModelsDev", () => {
     expect(result.models[0]?.source_claims.find((c) => c.collector === "models-dev")?.field_paths).not.toContain(
       "canonical_model.knowledge_cutoff"
     );
+  });
+
+  it("gap-fills pricing from models.dev for a provider whose API carries none (OpenCode Go)", async () => {
+    const go = nullPricedOffering("opencode-go", "minimax-m3");
+    go.pricing = {
+      ...go.pricing,
+      kind: "subscription_included",
+      subscription: { billing: "flat_monthly", per_token_billed: false, reference_pricing: true }
+    };
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [go], context: context(successfulFetch) });
+
+    expect(result.models[0]?.pricing).toMatchObject({
+      kind: "subscription_included",
+      input_usd_per_1m_tokens: 0.3,
+      output_usd_per_1m_tokens: 1.2,
+      currency: "USD",
+      subscription: { billing: "flat_monthly", per_token_billed: false, reference_pricing: true }
+    });
+    expect(result.models[0]?.capabilities).toEqual(expect.arrayContaining(["tool_use", "reasoning"]));
+    const claim = result.models[0]?.source_claims.find((c) => c.collector === "models-dev");
+    expect(claim?.field_paths).toEqual(expect.arrayContaining([
+      "pricing.input_usd_per_1m_tokens",
+      "pricing.output_usd_per_1m_tokens"
+    ]));
+    expect(claim?.field_paths).not.toContain("pricing.kind");
+    expect(result.notices).toEqual([]);
+  });
+
+  it("gap-fills pricing for Gemini, whose listing API carries none", async () => {
+    const gemini = nullPricedOffering("gemini", "gemini-2.5-pro");
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [gemini], context: context(successfulFetch) });
+
+    expect(result.models[0]?.pricing).toMatchObject({
+      kind: "paid",
+      input_usd_per_1m_tokens: 1.25,
+      output_usd_per_1m_tokens: 10,
+      currency: "USD"
+    });
+    expect(result.notices).toEqual([]);
+  });
+
+  it("marks a zero-cost OpenCode Zen model free with a populated free block", async () => {
+    const zen = nullPricedOffering("opencode-zen", "deepseek-v4-flash-free");
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [zen], context: context(successfulFetch) });
+
+    expect(result.models[0]?.pricing.kind).toBe("free");
+    expect(result.models[0]?.pricing.input_usd_per_1m_tokens).toBe(0);
+    expect(result.models[0]?.pricing.free).toMatchObject({
+      is_currently_free: true,
+      basis: "zero_priced_model",
+      confidence: "medium"
+    });
+    const claim = result.models[0]?.source_claims.find((c) => c.collector === "models-dev");
+    expect(claim?.field_paths).toEqual(expect.arrayContaining(["pricing.kind", "pricing.free"]));
+  });
+
+  it("does not gap-fill pricing for a provider not on the pricing allow-list", async () => {
+    // groq is not in pricingGapFillAllowed; a null price stays null even though models.dev has a cost.
+    const groq = nullPricedOffering("groq", "openai/gpt-oss-120b");
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [groq], context: context(successfulFetch) });
+
+    expect(result.models[0]?.pricing.input_usd_per_1m_tokens).toBeNull();
+    expect(result.models[0]?.pricing.kind).toBe("unknown");
+    expect(result.models[0]?.source_claims.find((c) => c.collector === "models-dev")?.field_paths).not.toContain(
+      "pricing.input_usd_per_1m_tokens"
+    );
+  });
+
+  it("never overrides a non-null first-party OpenCode price (fills output-only, notices on the input delta)", async () => {
+    const go = nullPricedOffering("opencode-go", "minimax-m3");
+    // Simulate a first-party input price present but output missing.
+    go.pricing = { ...go.pricing, kind: "paid", input_usd_per_1m_tokens: 0.9, currency: "USD" };
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [go], context: context(successfulFetch) });
+
+    // Input preserved (0.9, not models.dev's 0.3); output gap-filled.
+    expect(result.models[0]?.pricing.input_usd_per_1m_tokens).toBe(0.9);
+    expect(result.models[0]?.pricing.output_usd_per_1m_tokens).toBe(1.2);
+    // 0.9 vs 0.3 is a >20% delta on the non-null first-party value → mismatch notice.
+    expect(result.notices).toEqual([
+      expect.objectContaining({ collector: "models-dev", message: "models-dev pricing mismatch" })
+    ]);
   });
 
   it("skips enrichment without carry-forward when models.dev is unavailable", async () => {

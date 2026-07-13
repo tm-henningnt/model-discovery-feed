@@ -90,6 +90,52 @@ describe("canonicalize", () => {
     expect(twice).toEqual(once);
   });
 
+  it("resolves opencode-go:kimi-k2.7-code to moonshotai/kimi-k2.7-code at high confidence", async () => {
+    const { canonicalize } = await import("./canonicalize");
+    const opencodeGo = offering(1);
+    opencodeGo.id = "opencode-go:kimi-k2.7-code";
+    opencodeGo.provider = { id: "opencode-go", name: "OpenCode Go" };
+    opencodeGo.provider_model_id = "kimi-k2.7-code";
+    opencodeGo.canonical_model = {
+      id: "kimi-k2.7-code",
+      confidence: "medium",
+      knowledge_cutoff: null,
+      release_date: null,
+      open_weights: null
+    };
+    opencodeGo.endpoint = { ...opencodeGo.endpoint, model: "kimi-k2.7-code" };
+
+    const result = canonicalize([opencodeGo]);
+
+    expect(result.models[0].canonical_model).toMatchObject({
+      id: "moonshotai/kimi-k2.7-code",
+      confidence: "high"
+    });
+  });
+
+  it("resolves opencode-zen:deepseek-v4-flash-free to deepseek/deepseek-v4-flash at high confidence", async () => {
+    const { canonicalize } = await import("./canonicalize");
+    const opencodeZen = offering(1);
+    opencodeZen.id = "opencode-zen:deepseek-v4-flash-free";
+    opencodeZen.provider = { id: "opencode-zen", name: "OpenCode Zen" };
+    opencodeZen.provider_model_id = "deepseek-v4-flash-free";
+    opencodeZen.canonical_model = {
+      id: "deepseek-v4-flash-free",
+      confidence: "medium",
+      knowledge_cutoff: null,
+      release_date: null,
+      open_weights: null
+    };
+    opencodeZen.endpoint = { ...opencodeZen.endpoint, model: "deepseek-v4-flash-free" };
+
+    const result = canonicalize([opencodeZen]);
+
+    expect(result.models[0].canonical_model).toMatchObject({
+      id: "deepseek/deepseek-v4-flash",
+      confidence: "high"
+    });
+  });
+
   describe("alias staleness notice", () => {
     it("emits one aggregated notice listing every alias target absent from the live OpenRouter catalog", async () => {
       vi.resetModules();
@@ -146,3 +192,4 @@ describe("canonicalize", () => {
     });
   });
 });
+

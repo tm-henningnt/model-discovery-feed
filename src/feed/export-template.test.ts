@@ -140,6 +140,56 @@ describe("renderExport", () => {
     ]);
   });
 
+  describe("recommendation-rich virtual fields", () => {
+    it("_capabilities joins the capability list with slashes", () => {
+      const output = renderExport(template("{{_capabilities}}"), [cloneModels()[0]]);
+      expect(output).toBe("chat/coding/tool_use/structured_output/streaming");
+    });
+
+    it("_delegation_guidance composes pricing, context, scores, blended price, and caps", () => {
+      const model = cloneModels()[0]; // openrouter qwen3-coder:free — scored, free
+      const output = renderExport(template("{{_delegation_guidance}}"), [model]);
+      expect(output).toContain("free");
+      expect(output).toContain("coding 71.4");
+      expect(output).toContain("reasoning 51.2");
+      expect(output).toContain("ctx 262K");
+      expect(output).toContain("caps chat/coding");
+    });
+
+    it("appends recommendation notes and neutralizes JSON-breaking characters", () => {
+      const model = cloneModels()[0];
+      model.quality.recommendation_notes = ['Great "coder"\nreliable'];
+      const output = renderExport(template("{{_delegation_guidance}}"), [model]);
+      expect(output).toContain("Great 'coder' reliable");
+      expect(output).not.toContain('"');
+      expect(output).not.toContain("\n");
+    });
+
+    it("neutralizes C0 control characters in raw-emitted guidance", () => {
+      const model = cloneModels()[0];
+      model.quality.recommendation_notes = ["col1" + String.fromCharCode(9) + "col2" + String.fromCharCode(1) + "x"];
+      const output = renderExport(template("{{_delegation_guidance}}"), [model]);
+      expect(output).not.toContain(String.fromCharCode(9));
+      expect(output).not.toContain(String.fromCharCode(1));
+      expect(() => JSON.parse('"' + output + '"')).not.toThrow();
+    });
+
+
+    it("renders the Cline CC preset as valid JSON with rich per-profile guidance", () => {
+      const preset = EXPORT_PRESETS.find((p) => p.id === "preset-cline-cc")!;
+      const parsed = JSON.parse(renderExport(preset, cloneModels())) as {
+        profiles: Array<{ name: string; provider: string; model: string; guidance: string }>;
+      };
+
+      expect(parsed.profiles).toHaveLength(2);
+      const first = parsed.profiles[0];
+      expect(first.provider).toBe("openrouter");
+      // Guidance now carries the feed's recommendation data, not just pricing.kind.
+      expect(first.guidance).toContain("Model Feed —");
+      expect(first.guidance).toContain("coding 71.4");
+    });
+  });
+
   describe("delegation-table preset (AC-008)", () => {
     const preset = EXPORT_PRESETS.find((p) => p.id === "preset-delegation-table")!;
 

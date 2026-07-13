@@ -32,7 +32,7 @@ export const EXPORT_PRESETS: ExportPreset[] = [
       "name": "{{provider.id}}-{{provider_model_id|slug}}",
       "provider": "{{provider.id}}",
       "model": "{{provider_model_id}}",
-      "guidance": "Model Feed: {{pricing.kind}} candidate. Context {{limits.context_tokens|tokens}}. Free-claim verified {{pricing.free.last_verified_at|date}} ({{pricing.free.confidence}} confidence)."
+      "guidance": "Model Feed — {{display_name}}: {{_delegation_guidance}}"
     }`,
     wrapperTemplate: `{
   "note": "Project-local profiles for the cline Claude Code plugin (--profile on /cline:delegate and /cline:review). Entries: { \\"name\\", \\"provider\\", \\"model\\" (optional — omit to use the provider's configured default) }. Entries here override the plugin's built-in profiles and the derived ClinePass model names. List everything with /cline:profiles. Safe to commit. Set \\"ledger\\": true to append one line of telemetry per Run (no task text) to .cline-runs.ndjson beside this file — consider gitignoring that file.",

@@ -9,7 +9,15 @@ import type {
   SourceClaim
 } from "../feed/schema";
 
-export type CollectorId = "openrouter" | "groq" | "gemini" | "github-models";
+export type CollectorId =
+  | "openrouter"
+  | "groq"
+  | "gemini"
+  | "github-models"
+  | "opencode-go"
+  | "opencode-zen"
+  | "cline"
+  | "cline-pass";
 
 export type CollectorNotice = Record<string, unknown>;
 

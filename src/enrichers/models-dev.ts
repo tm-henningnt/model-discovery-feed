@@ -52,7 +52,9 @@ const modelsDevProviderByProviderId: Record<string, string> = {
   gemini: "google",
   groq: "groq",
   "github-models": "github-models",
-  openrouter: "openrouter"
+  openrouter: "openrouter",
+  "opencode-go": "opencode-go",
+  "opencode-zen": "opencode"
 };
 
 /*
@@ -66,7 +68,22 @@ const capabilityGapFillAllowed: Record<string, boolean> = {
   gemini: true,
   groq: false,
   "github-models": false,
-  openrouter: false
+  openrouter: false,
+  // The OpenCode listing endpoints expose no capability flags, so models.dev is the only source.
+  "opencode-go": true,
+  "opencode-zen": true
+};
+
+// Providers whose own API publishes no pricing at all — models.dev is the authoritative source (it is
+// what the OpenCode CLI itself reads). Fill only when our collected pricing is null; plan 030's
+// "never override a non-null first-party price" guarantee is preserved because a null is not a value.
+// Since plan 047, the pricing kind is only rewritten when the collector left it as "unknown".
+const pricingGapFillAllowed: Record<string, boolean> = {
+  "opencode-go": true,
+  "opencode-zen": true,
+  // The Google generative-language listing carries no pricing; models.dev's `google` cost is Google's
+  // own authoritative Gemini API price — same rationale as OpenCode.
+  gemini: true
 };
 
 type ModelsDevModel = z.infer<typeof modelsDevModelSchema>;
@@ -159,6 +176,57 @@ function enrichOffering(model: ModelOffering, source: ModelsDevModel, modelsDevP
     }
   }
 
+  const providerInput = model.pricing.input_usd_per_1m_tokens;
+  const providerOutput = model.pricing.output_usd_per_1m_tokens;
+  // models.dev `cost` is already denominated per 1M tokens, matching our pricing fields.
+  const modelsDevInput = toNonNegativeNumber(source.cost?.input);
+  const modelsDevOutput = toNonNegativeNumber(source.cost?.output);
+
+  // Gap-fill pricing only for providers whose own API carries none, and only into null fields.
+  let pricing = model.pricing;
+  if (pricingGapFillAllowed[model.provider.id] === true) {
+    const filledInput = providerInput === null ? modelsDevInput : null;
+    const filledOutput = providerOutput === null ? modelsDevOutput : null;
+    if (filledInput !== null || filledOutput !== null) {
+      const nextInput = providerInput ?? filledInput;
+      const nextOutput = providerOutput ?? filledOutput;
+      const isFree = nextInput === 0 && nextOutput === 0;
+      const nextKind =
+        model.pricing.kind !== "unknown"
+          ? model.pricing.kind
+          : isFree
+            ? "free"
+            : nextInput !== null && nextOutput !== null
+              ? "paid"
+              : model.pricing.kind;
+      pricing = {
+        ...model.pricing,
+        input_usd_per_1m_tokens: nextInput,
+        output_usd_per_1m_tokens: nextOutput,
+        kind: nextKind,
+        currency: model.pricing.currency ?? "USD",
+        free:
+          nextKind === "free" && !model.pricing.free
+            ? {
+                is_currently_free: true,
+                basis: "zero_priced_model",
+                requires_account: true,
+                requires_api_key: true,
+                requires_credit_card: null,
+                quota: null,
+                expires_at: null,
+                last_verified_at: context.now.toISOString(),
+                confidence: "medium"
+              }
+            : model.pricing.free
+      };
+      if (filledInput !== null) fieldPaths.push("pricing.input_usd_per_1m_tokens");
+      if (filledOutput !== null) fieldPaths.push("pricing.output_usd_per_1m_tokens");
+      if (nextKind !== model.pricing.kind) fieldPaths.push("pricing.kind");
+      if (nextKind === "free" && !model.pricing.free) fieldPaths.push("pricing.free");
+    }
+  }
+
   const sourceReference = {
     snapshot_id: "models-dev-live-response",
     json_pointer: `/${escapeJsonPointerSegment(modelsDevProviderId)}/models/${escapeJsonPointerSegment(model.provider_model_id)}`,
@@ -175,6 +243,7 @@ function enrichOffering(model: ModelOffering, source: ModelsDevModel, modelsDevP
           max_output_tokens: maxOutputTokens ?? model.limits.max_output_tokens
         },
         canonical_model: canonicalModel,
+        pricing,
         source_claims: [
           ...model.source_claims,
           claim({
@@ -190,10 +259,7 @@ function enrichOffering(model: ModelOffering, source: ModelsDevModel, modelsDevP
         ]
       };
 
-  const providerInput = model.pricing.input_usd_per_1m_tokens;
-  const providerOutput = model.pricing.output_usd_per_1m_tokens;
-  const modelsDevInput = toNonNegativeNumber(source.cost?.input);
-  const modelsDevOutput = toNonNegativeNumber(source.cost?.output);
+  // Cross-check only fires on a non-null first-party price, so a gap-filled null never mismatches.
   const inputMismatch = providerInput !== null && modelsDevInput !== null && pricingDiffersMoreThanTwentyPercent(providerInput, modelsDevInput);
   const outputMismatch = providerOutput !== null && modelsDevOutput !== null && pricingDiffersMoreThanTwentyPercent(providerOutput, modelsDevOutput);
 

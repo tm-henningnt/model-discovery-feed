@@ -2,6 +2,56 @@ import { formatScore, formatSpeed, formatTokens } from "./format";
 import { blendedPricePer1M } from "./ranking";
 import type { ModelOffering } from "./schema";
 
+// Text virtual fields are emitted raw (not JSON-escaped), so they must be safe
+// to drop into a JSON string or a Markdown cell: no quotes, backslashes, pipes,
+// or newlines.
+function sanitizeForRaw(text: string): string {
+  return text
+    .replace(/[\\"|]/g, "'")
+    .replace(/\s*[\r\n]+\s*/g, " ")
+    .replace(/[\u0000-\u001f]/g, " ")
+    .trim();
+}
+
+function pricingSummary(model: ModelOffering): string {
+  const kind = model.pricing.kind;
+  if (kind === "subscription_included") {
+    const multiplier = (model.pricing.subscription as { quota_multiplier_vs_payg?: unknown } | undefined)
+      ?.quota_multiplier_vs_payg;
+    return typeof multiplier === "string" ? `subscription bundle (~${multiplier} pay-as-you-go quota)` : "subscription bundle";
+  }
+  if (kind === "free_tier") return "free tier (rate-limited)";
+  if (kind === "free") return "free";
+  if (kind === "paid") return "pay-as-you-go";
+  return kind;
+}
+
+// A one-line delegation briefing composed from the feed's richer data — pricing
+// posture, context, quality scores, blended price, capabilities, and any
+// recommendation notes — for embedding as profile/description text.
+function delegationGuidance(model: ModelOffering): string {
+  const bits: string[] = [pricingSummary(model)];
+
+  if (model.limits.context_tokens != null) {
+    bits.push(`ctx ${formatTokens(model.limits.context_tokens)}`);
+  }
+
+  const scores: string[] = [];
+  if (model.quality.coding_score != null) scores.push(`coding ${formatScore(model.quality.coding_score)}`);
+  if (model.quality.reasoning_score != null) scores.push(`reasoning ${formatScore(model.quality.reasoning_score)}`);
+  if (model.quality.agentic_score != null) scores.push(`agentic ${formatScore(model.quality.agentic_score)}`);
+  if (scores.length > 0) bits.push(scores.join(", "));
+
+  const price = blendedPricePer1M(model);
+  if (Number.isFinite(price) && price > 0) bits.push(`~$${price.toFixed(2)}/1M blended`);
+
+  if (model.capabilities.length > 0) bits.push(`caps ${model.capabilities.join("/")}`);
+
+  const notes = model.quality.recommendation_notes.join(" ").trim();
+  const summary = bits.join("; ");
+  return sanitizeForRaw(notes ? `${summary}. ${notes}` : summary);
+}
+
 // Computed fields no ordinary model path expresses: derived pricing and
 // display-formatted scores. Resolved before the generic path-based lookup so
 // existing presets (which only ever reference real model paths) are
@@ -14,7 +64,10 @@ const VIRTUAL_FIELDS: Record<string, (model: ModelOffering) => string> = {
   _blended_price_per_1m: (model) => {
     const price = blendedPricePer1M(model);
     return Number.isFinite(price) ? `$${price.toFixed(2)}` : "—";
-  }
+  },
+  _capabilities: (model) => model.capabilities.join("/"),
+  _recommendation: (model) => sanitizeForRaw(model.quality.recommendation_notes.join(" ")),
+  _delegation_guidance: (model) => delegationGuidance(model)
 };
 
 export type ExportTemplate = {

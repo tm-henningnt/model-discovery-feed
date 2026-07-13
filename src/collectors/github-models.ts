@@ -82,7 +82,10 @@ function normalizeGitHubModel(raw: GitHubModel, observedAt: string, index: numbe
 
   const contextTokens = toPositiveInt(raw.limits?.max_input_tokens);
   const maxOutputTokens = toPositiveInt(raw.limits?.max_output_tokens);
-  const availabilityStatus = raw.rate_limit_tier === "low" ? "limited" : "available";
+  // `rate_limit_tier` is a request-rate/QoS class, not an availability signal — and its semantics are
+  // inverse ("low"-tier models get the *higher* free request allowance). It must not gate availability;
+  // it only informs the free-tier quota note below. Listed catalog models are available.
+  const rateLimitTier = normalizeText(raw.rate_limit_tier);
 
   return {
     id: `github-models:${providerModelId}`,
@@ -112,15 +115,29 @@ function normalizeGitHubModel(raw: GitHubModel, observedAt: string, index: numbe
       max_output_tokens: maxOutputTokens
     },
     pricing: {
-      kind: "unknown",
+      // GitHub Models is a free, rate-limited preview by default (with an opt-in paid production tier
+      // billed on GitHub's own token-unit scheme). The catalog exposes no per-token price, and any
+      // single number would misrepresent it — so carry the free-tier classification with a quota note
+      // and leave the per-token fields null. See docs/research/github-models-pricing.md.
+      kind: "free_tier",
       input_usd_per_1m_tokens: null,
       output_usd_per_1m_tokens: null,
       currency: null,
       metering: "tokens",
-      free: null
+      free: {
+        is_currently_free: true,
+        basis: "account_free_tier",
+        requires_account: true,
+        requires_api_key: true,
+        requires_credit_card: false,
+        quota: rateLimitTier ? `rate-limited (tier: ${rateLimitTier})` : "rate-limited preview",
+        expires_at: null,
+        last_verified_at: observedAt,
+        confidence: "medium"
+      }
     },
     availability: {
-      status: availabilityStatus,
+      status: "available",
       last_checked_at: observedAt,
       last_success_at: observedAt,
       stale_after_seconds: 86400
@@ -131,7 +148,9 @@ function normalizeGitHubModel(raw: GitHubModel, observedAt: string, index: numbe
       agentic_score: null,
       speed_score: null,
       benchmarks: null,
-      recommendation_notes: []
+      recommendation_notes: [
+        "GitHub Models free preview (rate-limited); production usage is billed per token-unit on GitHub's own pricing scheme, not the model creator's per-token rate."
+      ]
     },
     source_claims: [
       claim({

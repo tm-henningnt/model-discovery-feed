@@ -4,9 +4,20 @@ import { geminiCollector } from "./gemini";
 import { githubModelsCollector } from "./github-models";
 import { groqCollector } from "./groq";
 import { openrouterCollector } from "./openrouter";
+import { opencodeGoCollector, opencodeZenCollector } from "./opencode";
+import { clineCollector, clinePassCollector } from "./cline";
 import type { Collector, CollectorContext, CollectorResult } from "./types";
 
-export const collectors: Collector[] = [openrouterCollector, groqCollector, geminiCollector, githubModelsCollector];
+export const collectors: Collector[] = [
+  openrouterCollector,
+  groqCollector,
+  geminiCollector,
+  githubModelsCollector,
+  opencodeGoCollector,
+  opencodeZenCollector,
+  clineCollector,
+  clinePassCollector
+];
 
 export type CollectorExecution = {
   collector: Collector;
