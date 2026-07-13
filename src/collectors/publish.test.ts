@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { exampleFeed } from "../feed/fixture";
 import type { FeedDocument, ModelOffering, Provider } from "../feed/schema";
 import { mergeCollectorFeed } from "./index";
-import { runCollectorsAndPublish, type PrismaPublishClient, type PrismaPublishTransaction } from "./publish";
+import { runCollectorsAndPublish, type PrismaPublishClient } from "./publish";
 import type { Collector, CollectorContext, CollectorNotice } from "./types";
 import {
   ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
@@ -130,56 +130,31 @@ function createFakePrisma(
     feedReleases: structuredClone(initialFeedReleases)
   };
 
-  const transaction = async <T>(callback: (tx: PrismaPublishTransaction) => Promise<T>): Promise<T> => {
-    const staged = {
-      collectorRuns: structuredClone(state.collectorRuns),
-      sourceSnapshots: structuredClone(state.sourceSnapshots),
-      feedReleases: structuredClone(state.feedReleases)
-    };
-    const createId = (prefix: string) => `${prefix}-${++nextId}`;
-    const tx: PrismaPublishTransaction = {
-      collectorRun: {
-        async create({ data }) {
-          const record: FakeCollectorRun = {
-            id: createId("collector-run"),
-            ...data
-          };
-          staged.collectorRuns.push(record);
-          return { id: record.id };
-        }
-      },
-      sourceSnapshot: {
-        async create({ data }) {
-          const record: FakeSourceSnapshot = {
-            id: createId("source-snapshot"),
-            ...data
-          };
-          staged.sourceSnapshots.push(record);
-          return record;
-        }
-      },
-      feedRelease: {
-        async create({ data }) {
-          const record: FakeFeedRelease = {
-            id: createId("feed-release"),
-            ...data
-          };
-          staged.feedReleases.push(record);
-          return record;
-        }
-      }
-    };
-
-    const result = await callback(tx);
-    state.collectorRuns = staged.collectorRuns;
-    state.sourceSnapshots = staged.sourceSnapshots;
-    state.feedReleases = staged.feedReleases;
-    return result;
-  };
+  const createId = (prefix: string) => `${prefix}-${++nextId}`;
 
   return {
-    $transaction: transaction,
+    collectorRun: {
+      async createManyAndReturn({ data }) {
+        return data.map((row) => {
+          const record: FakeCollectorRun = {
+            id: createId("collector-run"),
+            ...row
+          };
+          state.collectorRuns.push(record);
+          return { id: record.id, collector: record.collector };
+        });
+      }
+    },
     sourceSnapshot: {
+      async createMany({ data }) {
+        for (const row of data) {
+          state.sourceSnapshots.push({
+            id: createId("source-snapshot"),
+            ...row
+          });
+        }
+        return { count: data.length };
+      },
       async findFirst({ where }) {
         return state.sourceSnapshots
           .filter(
@@ -187,6 +162,16 @@ function createFakePrisma(
               snapshot.collector === where.collector && snapshot.sourceType === where.sourceType
           )
           .sort((left, right) => right.observedAt.getTime() - left.observedAt.getTime())[0] ?? null;
+      }
+    },
+    feedRelease: {
+      async create({ data }) {
+        const record: FakeFeedRelease = {
+          id: createId("feed-release"),
+          ...data
+        };
+        state.feedReleases.push(record);
+        return record;
       }
     },
     state

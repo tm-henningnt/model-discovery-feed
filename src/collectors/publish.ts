@@ -12,10 +12,6 @@ import { enrichModels } from "../enrichers/pipeline";
 import { getFixtureFeed, mergeCollectorFeed, runCollectors } from "./index";
 import type { Collector, CollectorContext, CollectorNotice } from "./types";
 
-type CollectorRunRecord = {
-  id: string;
-};
-
 type CollectorSnapshotBody = {
   provider: Provider;
   model_count: number;
@@ -23,29 +19,40 @@ type CollectorSnapshotBody = {
   validation_error: string | null;
 };
 
-export type PrismaPublishTransaction = {
+export type CollectorRunCreateData = {
+  collector: string;
+  status: string;
+  startedAt: Date;
+  finishedAt: Date;
+  errorMessage: string | null;
+};
+
+export type SourceSnapshotCreateData = {
+  sourceType: string;
+  sourceUrl: string | null;
+  collector: string;
+  observedAt: Date;
+  body: CollectorSnapshotBody | Record<string, unknown>;
+  collectorRunId: string;
+};
+
+export type PrismaPublishClient = {
   collectorRun: {
-    create(args: {
-      data: {
-        collector: string;
-        status: string;
-        startedAt: Date;
-        finishedAt: Date;
-        errorMessage: string | null;
-      };
-    }): Promise<CollectorRunRecord>;
+    createManyAndReturn(args: {
+      data: CollectorRunCreateData[];
+      select: { id: true; collector: true };
+    }): Promise<Array<{ id: string; collector: string }>>;
   };
   sourceSnapshot: {
-    create(args: {
-      data: {
-        sourceType: string;
-        sourceUrl: string | null;
-        collector: string;
-        observedAt: Date;
-        body: CollectorSnapshotBody | Record<string, unknown>;
-        collectorRunId: string;
-      };
-    }): Promise<unknown>;
+    createMany(args: { data: SourceSnapshotCreateData[] }): Promise<unknown>;
+    findFirst(args: {
+      where: { collector: string; sourceType: string };
+      orderBy: { observedAt: "desc" };
+    }): Promise<{
+      id: string;
+      observedAt: Date;
+      body: unknown;
+    } | null>;
   };
   feedRelease: {
     create(args: {
@@ -59,35 +66,9 @@ export type PrismaPublishTransaction = {
   };
 };
 
-export type PrismaTransactionOptions = {
-  maxWait?: number;
-  timeout?: number;
-};
-
-export type PrismaPublishClient = {
-  $transaction<T>(
-    callback: (tx: PrismaPublishTransaction) => Promise<T>,
-    options?: PrismaTransactionOptions
-  ): Promise<T>;
-  sourceSnapshot?: {
-    findFirst(args: {
-      where: { collector: string; sourceType: string };
-      orderBy: { observedAt: "desc" };
-    }): Promise<{
-      id: string;
-      observedAt: Date;
-      body: unknown;
-    } | null>;
-  };
-};
-
 async function latestArtificialAnalysisSnapshot(
   prisma: PrismaPublishClient
 ): Promise<ArtificialAnalysisSnapshot | null> {
-  if (!prisma.sourceSnapshot) {
-    return null;
-  }
-
   return prisma.sourceSnapshot.findFirst({
     where: {
       collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
@@ -162,78 +143,83 @@ export async function runCollectorsAndPublish(options: {
 
   const validationError = validationFailure ? validationErrorMessage(validationFailure) : null;
 
-  await options.prisma.$transaction(async (tx) => {
-    for (const execution of executions) {
-      const run = await tx.collectorRun.create({
-        data: {
-          collector: execution.collector.id,
-          status: collectorRunStatus(execution.result.notices),
-          startedAt: options.context.now,
-          finishedAt: options.context.now,
-          errorMessage: collectorRunErrorMessage(execution.result.notices, validationError)
-        }
-      });
+  // Prisma Accelerate caps interactive transactions at 15s, and one round-trip
+  // per record blows past that, so batch everything into three requests instead:
+  // all collector runs, then all snapshots, then the release. These are
+  // append-only audit rows, so losing atomicity across them is acceptable.
+  const runRows: CollectorRunCreateData[] = executions.map((execution) => ({
+    collector: execution.collector.id,
+    status: collectorRunStatus(execution.result.notices),
+    startedAt: options.context.now,
+    finishedAt: options.context.now,
+    errorMessage: collectorRunErrorMessage(execution.result.notices, validationError)
+  }));
 
-      await tx.sourceSnapshot.create({
-        data: {
-          sourceType: "collector_result_summary",
-          sourceUrl: execution.result.provider.homepage,
-          collector: execution.collector.id,
-          observedAt: options.context.now,
-          body: {
-            provider: execution.result.provider,
-            model_count: execution.result.models.length,
-            notices: execution.result.notices,
-            validation_error: validationError
-          },
-          collectorRunId: run.id
-        }
-      });
+  if (enriched.artificialAnalysis.attemptedFetch) {
+    runRows.push({
+      collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
+      status: collectorRunStatus(enriched.artificialAnalysis.notices),
+      startedAt: options.context.now,
+      finishedAt: options.context.now,
+      errorMessage: collectorRunErrorMessage(enriched.artificialAnalysis.notices, validationError)
+    });
+  }
+
+  const createdRuns = runRows.length > 0
+    ? await options.prisma.collectorRun.createManyAndReturn({
+        data: runRows,
+        select: { id: true, collector: true }
+      })
+    : [];
+  const runIdByCollector = new Map(createdRuns.map((run) => [run.collector, run.id]));
+
+  const runIdFor = (collector: string): string => {
+    const runId = runIdByCollector.get(collector);
+    if (!runId) {
+      throw new Error(`collector run was not persisted for collector: ${collector}`);
     }
+    return runId;
+  };
 
-    if (enriched.artificialAnalysis.attemptedFetch) {
-      const run = await tx.collectorRun.create({
-        data: {
-          collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
-          status: collectorRunStatus(enriched.artificialAnalysis.notices),
-          startedAt: options.context.now,
-          finishedAt: options.context.now,
-          errorMessage: collectorRunErrorMessage(enriched.artificialAnalysis.notices, validationError)
-        }
-      });
+  const snapshotRows: SourceSnapshotCreateData[] = executions.map((execution) => ({
+    sourceType: "collector_result_summary",
+    sourceUrl: execution.result.provider.homepage,
+    collector: execution.collector.id,
+    observedAt: options.context.now,
+    body: {
+      provider: execution.result.provider,
+      model_count: execution.result.models.length,
+      notices: execution.result.notices,
+      validation_error: validationError
+    },
+    collectorRunId: runIdFor(execution.collector.id)
+  }));
 
-      if (enriched.artificialAnalysis.snapshotToPersist) {
-        await tx.sourceSnapshot.create({
-          data: {
-            sourceType: ARTIFICIAL_ANALYSIS_SNAPSHOT_TYPE,
-            sourceUrl: ARTIFICIAL_ANALYSIS_API_URL,
-            collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
-            observedAt: options.context.now,
-            body: enriched.artificialAnalysis.snapshotToPersist as Record<string, unknown>,
-            collectorRunId: run.id
-          }
-        });
+  if (enriched.artificialAnalysis.attemptedFetch && enriched.artificialAnalysis.snapshotToPersist) {
+    snapshotRows.push({
+      sourceType: ARTIFICIAL_ANALYSIS_SNAPSHOT_TYPE,
+      sourceUrl: ARTIFICIAL_ANALYSIS_API_URL,
+      collector: ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
+      observedAt: options.context.now,
+      body: enriched.artificialAnalysis.snapshotToPersist as Record<string, unknown>,
+      collectorRunId: runIdFor(ARTIFICIAL_ANALYSIS_COLLECTOR_ID)
+    });
+  }
+
+  if (snapshotRows.length > 0) {
+    await options.prisma.sourceSnapshot.createMany({ data: snapshotRows });
+  }
+
+  if (validated) {
+    await options.prisma.feedRelease.create({
+      data: {
+        status: "published",
+        generatedAt,
+        sourceRevision: validated.feed.source_revision,
+        snapshotJson: validated
       }
-    }
-
-    if (validated) {
-      await tx.feedRelease.create({
-        data: {
-          status: "published",
-          generatedAt,
-          sourceRevision: validated.feed.source_revision,
-          snapshotJson: validated
-        }
-      });
-    }
-  }, {
-    // The publish transaction issues many sequential writes (one collectorRun +
-    // sourceSnapshot per collector, plus the AA snapshot and the feed release).
-    // Against a remote database the round-trips add up and blow past Prisma's
-    // 5s default interactive-transaction timeout, so raise both limits.
-    maxWait: 15_000,
-    timeout: 60_000
-  });
+    });
+  }
 
   if (validationFailure) {
     throw validationFailure;
