@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 // Must match FEED_KEY_COOKIE in src/server/auth.ts. Not imported from there:
-// that module also imports node:crypto, which the Edge middleware bundle
+// that module also imports node:crypto, which the Edge proxy bundle
 // cannot resolve.
 const FEED_KEY_COOKIE = "mdf_key";
 
@@ -11,7 +11,7 @@ async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function middleware(request: NextRequest): Promise<NextResponse> {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const expectedHash = process.env.MODEL_FEED_API_KEY_SHA256;
   if (!expectedHash) return NextResponse.next();
 
