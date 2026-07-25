@@ -46,9 +46,16 @@ type FakeFeedRelease = {
   snapshotJson: FeedDocument;
 };
 
+// Tests must declare every fetch they expect.
+// The default stub throws to catch unstubbed requests:
+// a real network call in a unit test makes the suite depend on provider uptime.
+const throwOnUnstubbed: typeof fetch = async (input) => {
+  throw new Error(`unstubbed fetch in test: ${String(input)}`);
+};
+
 function createContext(
   now: Date,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = throwOnUnstubbed,
   env: Record<string, string | undefined> = {}
 ): CollectorContext {
   return {
