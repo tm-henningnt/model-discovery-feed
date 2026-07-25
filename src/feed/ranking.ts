@@ -11,13 +11,10 @@ const preferredPricing = new Map([
   ["unknown", 0]
 ]);
 
-export const FASTEST_CODER_MIN_CODING_SCORE = 40;
-
 export const DELEGATION_PROFILE_IDS = [
   "best-free-coder",
   "best-coder",
   "best-agentic",
-  "fastest-coder",
   "best-value-coder"
 ] as const;
 
@@ -52,10 +49,9 @@ export function compareForBestFreeCoder(a: ModelOffering, b: ModelOffering, now 
     scoreAvailability(b) - scoreAvailability(a) ||
     Number(isPreferredOverStaleFreeClaim(b, now)) - Number(isPreferredOverStaleFreeClaim(a, now)) ||
     (preferredPricing.get(b.pricing.kind) ?? 0) - (preferredPricing.get(a.pricing.kind) ?? 0) ||
-    Number(b.capabilities.includes("coding")) - Number(a.capabilities.includes("coding")) ||
+    compareNullableNumbersDescending(a.quality.coding_score, b.quality.coding_score) ||
     Number(b.capabilities.includes("tool_use")) - Number(a.capabilities.includes("tool_use")) ||
     Number(b.capabilities.includes("structured_output")) - Number(a.capabilities.includes("structured_output")) ||
-    compareNullableNumbersDescending(a.quality.coding_score, b.quality.coding_score) ||
     (b.limits.context_tokens ?? 0) - (a.limits.context_tokens ?? 0) ||
     a.id.localeCompare(b.id)
   );
@@ -92,18 +88,6 @@ function predicateForBestAgentic(model: ModelOffering): boolean {
   );
 }
 
-export function compareForFastestCoder(a: ModelOffering, b: ModelOffering, _now = new Date()): number {
-  return compareNullableNumbersDescending(a.quality.speed_score, b.quality.speed_score) || a.id.localeCompare(b.id);
-}
-
-function predicateForFastestCoder(model: ModelOffering): boolean {
-  return (
-    model.quality.coding_score !== null &&
-    model.quality.coding_score >= FASTEST_CODER_MIN_CODING_SCORE &&
-    model.quality.speed_score !== null
-  );
-}
-
 export function compareForBestValueCoder(a: ModelOffering, b: ModelOffering, now = new Date()): number {
   return compareNullableNumbersDescending(valueScore(a, now), valueScore(b, now)) || a.id.localeCompare(b.id);
 }
@@ -126,7 +110,6 @@ const DELEGATION_PROFILE_RULES: Record<DelegationProfileId, ProfileRule> = {
   "best-free-coder": { predicate: predicateForBestFreeCoder, compare: compareForBestFreeCoder },
   "best-coder": { predicate: predicateForBestCoder, compare: compareForBestCoder },
   "best-agentic": { predicate: predicateForBestAgentic, compare: compareForBestAgentic },
-  "fastest-coder": { predicate: predicateForFastestCoder, compare: compareForFastestCoder },
   "best-value-coder": { predicate: predicateForBestValueCoder, compare: compareForBestValueCoder }
 };
 
@@ -138,7 +121,6 @@ function makeSelector(profileId: DelegationProfileId) {
 export const selectBestFreeCoder = makeSelector("best-free-coder");
 export const selectBestCoder = makeSelector("best-coder");
 export const selectBestAgentic = makeSelector("best-agentic");
-export const selectFastestCoder = makeSelector("fastest-coder");
 export const selectBestValueCoder = makeSelector("best-value-coder");
 
 function isDelegationProfileId(value: string): value is DelegationProfileId {

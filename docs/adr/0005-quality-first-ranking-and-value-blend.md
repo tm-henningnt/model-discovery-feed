@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+ADR 0010 revises this ADR: it removes `fastest-coder` and reorders `best-free-coder`.
+
 Formalizes `spec/spec-data-model-quality-scores.md`'s CON-005 (blend formula) and CON-006
 (fastest-coder floor). See also: ADR 0002, whose verbatim-units decision is what makes these scores
 safe to blend without a feed-owned normalization step; ADR 0004, whose propagated scores feed this

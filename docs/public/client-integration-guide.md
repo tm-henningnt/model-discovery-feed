@@ -296,6 +296,41 @@ own collector credentials. A provider can gate a model by account age, region, o
 feed's credentials do not have. Handle a rejected call from a provider even when the feed says
 `available`.
 
+### Delegation profiles
+
+`profiles[]` holds the feed's own recommendations, regenerated on every collector run. Four ids
+exist: `best-free-coder`, `best-coder`, `best-agentic`, and `best-value-coder`.
+
+```ts
+type FeedProfile = {
+  id: string;
+  object: "profile";
+  display_name: string;
+  description: string | null;
+  selection: {
+    model_offering_id: string;
+    selected_at: string;
+    expires_at: string | null;
+  };
+  criteria: Record<string, unknown>;
+};
+```
+
+Read a profile like this:
+
+1. Find the id you want. **Handle its absence.** A profile is omitted entirely when no offering
+   qualifies. The feed never emits an empty selection and never lowers its bar to fill one.
+2. Resolve `selection.model_offering_id` against `models`. It always resolves, and it always points
+   at an offering whose `policy.visibility` is `listed`.
+3. Check `selection.expires_at` before you act on a cached feed. Re-read the feed when it has passed.
+
+Call `GET /v1/models?profile=<id>` to apply the same predicate and ordering live. Use the published
+array when you want the same pick the feed published; use the query when you want a pick that
+respects your own filters.
+
+`fastest-coder` was removed. No provider the feed integrates publishes a per-endpoint speed
+measurement, so the profile could never return a result. Requests for it no longer resolve.
+
 ### Capabilities state kind, not degree
 
 A capability says what kind of work an offering supports. It never says how well the offering does

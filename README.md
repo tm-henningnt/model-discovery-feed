@@ -26,7 +26,7 @@ npm run dev
 - `GET /v1/schema`
 - `GET /v1/feed`
 - `GET /v1/status`
-- `GET /v1/models` — supports `?profile=` for a named delegation profile (`best-coder`, `best-agentic`, `fastest-coder`, `best-value-coder`, `best-free-coder`) alongside the usual additive filters
+- `GET /v1/models` — supports `?profile=` for a named delegation profile (`best-coder`, `best-agentic`, `best-value-coder`, `best-free-coder`) alongside the usual additive filters
 - `GET /v1/models/{id}`
 - `GET /v1/providers`
 

@@ -90,6 +90,38 @@ verbatim in its source's own units — no normalization, no rescaling:
 A `null` quality field means unscored, not a zero or a negative judgment. `attributions` names
 the sources these scores come from; carry that attribution forward wherever you surface them.
 
+### Delegation profiles
+
+A profile is one feed-authored recommendation: for a stated job, the single offering the feed picks.
+The feed regenerates every profile on each collector run from that run's own offerings.
+
+The feed publishes four:
+
+- `best-free-coder` — the best coder that costs nothing. Prefers a genuinely free offering over a
+  subscription one, then ranks on `coding_score`.
+- `best-coder` — the highest `coding_score` at any price, among offerings that support `tool_use`.
+- `best-agentic` — the highest `agentic_score`, among offerings that support `tool_use` and
+  `structured_output`.
+- `best-value-coder` — the highest `coding_score` per blended dollar, among paid offerings with
+  known prices.
+
+Each profile carries `selection.model_offering_id`, `selection.selected_at`, and
+`selection.expires_at`. `selected_at` is the run that made the pick. `expires_at` is that run plus
+`feed.default_stale_after_seconds`. Re-read the feed rather than trusting an expired pick.
+
+`criteria` records what the profile required and what it ordered by. Read it if you need to know why
+an offering won.
+
+Two rules to code against:
+
+- A profile is **absent** from the array when no offering qualifies. The feed never emits a profile
+  with an empty or null selection, and never lowers its bar to fill one. Handle a missing id.
+- A profile never selects an offering whose `policy.visibility` is not `listed`, so a retired or
+  hidden offering is never recommended.
+
+`GET /v1/models?profile=<id>` applies the same predicate and ordering live against the current feed.
+Use the published array for a stable pick, and the query for a pick against your own filters.
+
 ### Availability
 
 `availability.status` answers one question: does the provider's own catalog currently list this

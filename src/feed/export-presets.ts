@@ -62,7 +62,6 @@ export const EXPORT_PRESETS: ExportPreset[] = [
   delegationTablePreset("preset-delegation-table", "Delegation table (Markdown)"),
   delegationTablePreset("preset-best-coder", "Best coder (Markdown)", "best-coder"),
   delegationTablePreset("preset-best-agentic", "Best agentic (Markdown)", "best-agentic"),
-  delegationTablePreset("preset-fastest-coder", "Fastest coder (Markdown)", "fastest-coder"),
   delegationTablePreset("preset-best-value-coder", "Best value coder (Markdown)", "best-value-coder"),
   delegationTablePreset("preset-best-free-coder", "Best free coder (Markdown)", "best-free-coder")
 ];

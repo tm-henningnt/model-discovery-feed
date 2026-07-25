@@ -134,7 +134,6 @@ describe("renderExport", () => {
       "preset-delegation-table",
       "preset-best-coder",
       "preset-best-agentic",
-      "preset-fastest-coder",
       "preset-best-value-coder",
       "preset-best-free-coder"
     ]);
@@ -283,12 +282,12 @@ describe("renderExport", () => {
       ]);
     });
 
-    it("fastest-coder excludes offerings without a coding floor or a speed measurement", () => {
+    it("best-coder excludes offerings without tool_use or a coding score", () => {
       const models = cloneModels();
-      const ranked = rankByProfile(models, "fastest-coder");
+      const ranked = rankByProfile(models, "best-coder");
 
-      // The scored fixture model (coding 71.4, speed 245) clears the floor;
-      // the unscored one has neither.
+      // The scored fixture model (tool_use, coding 71.4) qualifies; the other
+      // fixture model has neither tool_use nor a coding score.
       expect(ranked.map((m) => m.id)).toEqual(["openrouter:qwen/qwen3-coder:free"]);
     });
   });

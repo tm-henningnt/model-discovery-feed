@@ -57,9 +57,6 @@ describe("filterModels", () => {
       "openrouter:qwen/qwen3-coder:free"
     ]);
     expect(filterModels(feed, { profile: "best-agentic" }).map((model) => model.id)).toEqual([paidCandidate.id]);
-    expect(filterModels(feed, { profile: "fastest-coder" }).map((model) => model.id)).toEqual([
-      "openrouter:qwen/qwen3-coder:free"
-    ]);
     expect(filterModels(feed, { profile: "best-value-coder" }).map((model) => model.id)).toEqual([paidCandidate.id]);
   });
 

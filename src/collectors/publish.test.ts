@@ -605,7 +605,12 @@ describe("runCollectorsAndPublish", () => {
     );
   });
 
-  it("drops a base-feed profile whose selected offering is not in the collector output", () => {
+  // Superseded by profile generation (issue #28): a collector feed no longer
+  // carries the base feed's own profiles over at all, dropped or otherwise —
+  // it generates every profile from its own final model set. The two tests
+  // below replace the old "drops a dangling base-feed profile" /
+  // "keeps a live base-feed profile" pair.
+  it("never carries the base feed's own profile over, even when its selected offering is not in the collector output", () => {
     const generatedAt = new Date("2026-07-08T18:30:00.000Z");
     const baseFeed = structuredClone(exampleFeed);
     const selectedId = baseFeed.profiles[0]!.selection.model_offering_id;
@@ -614,22 +619,19 @@ describe("runCollectorsAndPublish", () => {
 
     const merged = mergeCollectorFeed(baseFeed, [newProvider], [newModel], [], generatedAt);
 
-    // The fixture profile selects a fixture offering that no collector produces.
-    // Carrying it over would fail the schema's cross-object invariant.
     expect(baseFeed.profiles).not.toHaveLength(0);
     expect(merged.models.some((model) => model.id === selectedId)).toBe(false);
-    expect(merged.profiles).toHaveLength(0);
+    // The base feed's dangling profile is simply never a candidate — no
+    // "dropped" notice is expected, because nothing was carried over to drop.
+    expect(merged.notices.some((notice) => notice.message === "profile dropped: selected offering not in collector output")).toBe(false);
+    // The cloned fixture model qualifies for best-free-coder, best-coder, and
+    // best-agentic (see fixture.ts), so a fresh profile is generated for it.
+    const bestFreeCoder = merged.profiles.find((profile) => profile.id === "best-free-coder");
+    expect(bestFreeCoder?.selection.model_offering_id).toBe(newModel.id);
     expect(() => validateFeedDocument(merged)).not.toThrow();
-    expect(merged.notices).toContainEqual(
-      expect.objectContaining({
-        collector: "feed-merge",
-        message: "profile dropped: selected offering not in collector output",
-        model_offering_id: selectedId
-      })
-    );
   });
 
-  it("keeps a base-feed profile whose selected offering is in the collector output", () => {
+  it("regenerates every profile from the merged model set, even when the base feed's own selection is still present", () => {
     const generatedAt = new Date("2026-07-08T18:30:00.000Z");
     const baseFeed = structuredClone(exampleFeed);
     const fixtureProvider = baseFeed.providers[0]!;
@@ -639,7 +641,16 @@ describe("runCollectorsAndPublish", () => {
 
     const merged = mergeCollectorFeed(baseFeed, [fixtureProvider], [fixtureModel], [], generatedAt);
 
-    expect(merged.profiles).toHaveLength(baseFeed.profiles.length);
+    const bestFreeCoder = merged.profiles.find((profile) => profile.id === "best-free-coder");
+    expect(bestFreeCoder).toBeDefined();
+    expect(bestFreeCoder?.selection.model_offering_id).toBe(fixtureModel.id);
+    // Regenerated for this run, not copied from the base feed's own profile.
+    expect(bestFreeCoder?.selection.selected_at).toBe(generatedAt.toISOString());
+    expect(bestFreeCoder?.selection.expires_at).toBe(
+      new Date(generatedAt.getTime() + baseFeed.feed.default_stale_after_seconds * 1000).toISOString()
+    );
+    expect(bestFreeCoder?.selection.selected_at).not.toBe(baseFeed.profiles[0]!.selection.selected_at);
+    expect(bestFreeCoder?.selection.expires_at).not.toBe(baseFeed.profiles[0]!.selection.expires_at);
     expect(() => validateFeedDocument(merged)).not.toThrow();
   });
 });

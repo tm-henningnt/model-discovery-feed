@@ -2,19 +2,17 @@ import { describe, expect, it } from "vitest";
 import { hasStaleFreeClaim } from "./classification";
 import { exampleFeed } from "./fixture";
 import {
-  FASTEST_CODER_MIN_CODING_SCORE,
   blendedPricePer1M,
   compareNullableNumbersDescending,
   compareForBestAgentic,
   compareForBestCoder,
   compareForBestValueCoder,
-  compareForFastestCoder,
   compareRecommended,
+  rankByProfile,
   selectBestAgentic,
   selectBestCoder,
   selectBestFreeCoder,
-  selectBestValueCoder,
-  selectFastestCoder
+  selectBestValueCoder
 } from "./ranking";
 import type { FeedDocument, ModelOffering } from "./schema";
 
@@ -23,6 +21,29 @@ describe("best-free-coder ranking", () => {
     expect(selectBestFreeCoder(exampleFeed, new Date("2026-07-08T12:30:00.000Z"))?.id).toBe(
       "openrouter:qwen/qwen3-coder:free"
     );
+  });
+
+  it("selects nothing when no offering satisfies a profile's predicate", () => {
+    // ADR 0010 removed `fastest-coder`, which was the only profile whose tests
+    // covered an empty candidate pool. Profile generation must publish no
+    // profile rather than a poor match, so that behaviour needs coverage on a
+    // surviving profile.
+    const feed = structuredClone(exampleFeed);
+    feed.models = [
+      rankingModel("paid:no-agentic-capabilities", {
+        pricingKind: "paid",
+        capabilities: ["chat", "coding"],
+        agenticScore: 80
+      }),
+      rankingModel("paid:no-agentic-score", {
+        pricingKind: "paid",
+        capabilities: ["chat", "coding", "tool_use", "structured_output"],
+        agenticScore: null
+      })
+    ];
+
+    expect(rankByProfile(feed.models, "best-agentic")).toHaveLength(0);
+    expect(selectBestAgentic(feed)).toBeUndefined();
   });
 
   it("detects stale free claims", () => {
@@ -47,7 +68,7 @@ describe("best-free-coder ranking", () => {
     expect(selectBestFreeCoder(feed, now)?.id).toBe(alternative.id);
   });
 
-  it("uses coding score only after the existing free-pricing and capability tiebreaks", () => {
+  it("uses coding score only after the existing free-pricing tiebreak, ahead of capability tiebreaks", () => {
     const lowerScore = rankingModel("free:lower-score", {
       codingScore: 50,
       pricingKind: "free",
@@ -67,6 +88,45 @@ describe("best-free-coder ranking", () => {
     const feed = rankingFeed([lowerScore, higherScore, lowerPriorityPricing]);
 
     expect(selectBestFreeCoder(feed, FIXTURE_NOW)?.id).toBe(higherScore.id);
+  });
+
+  it("ranks a higher coding_score above structured_output presence (ADR 0010)", () => {
+    // Regression for the live-feed case: opencode-zen:mimo-v2.5-free (coding 56.8, no
+    // structured_output reported) must outrank cline:google/gemma-4-31b-it:free (coding
+    // 43.4, structured_output reported). OpenCode Zen's roster is sparse, not incapable —
+    // an unreported capability must not outweigh a measured quality score.
+    const higherScoreNoStructuredOutput = rankingModel("free:higher-score-no-structured-output", {
+      codingScore: 56.8,
+      pricingKind: "free",
+      capabilities: ["coding", "tool_use"]
+    });
+    const lowerScoreWithStructuredOutput = rankingModel("free:lower-score-structured-output", {
+      codingScore: 43.4,
+      pricingKind: "free",
+      capabilities: ["coding", "tool_use", "structured_output"]
+    });
+
+    const feed = rankingFeed([lowerScoreWithStructuredOutput, higherScoreNoStructuredOutput]);
+
+    expect(selectBestFreeCoder(feed, FIXTURE_NOW)?.id).toBe(higherScoreNoStructuredOutput.id);
+  });
+
+  it("still prefers a free offering over a higher-scoring subscription_included offering", () => {
+    // pricing kind stays above coding_score: "best free coder" means free to a consumer who
+    // does not already pay for a subscription, so a subscription_included offering must not
+    // win on score alone.
+    const subscriptionHigherScore = rankingModel("free:subscription-higher-score", {
+      codingScore: 76.2,
+      pricingKind: "subscription_included"
+    });
+    const freeLowerScore = rankingModel("free:free-lower-score", {
+      codingScore: 50,
+      pricingKind: "free"
+    });
+
+    const feed = rankingFeed([subscriptionHigherScore, freeLowerScore]);
+
+    expect(selectBestFreeCoder(feed, FIXTURE_NOW)?.id).toBe(freeLowerScore.id);
   });
 });
 
@@ -144,18 +204,6 @@ describe("delegation profiles", () => {
         agenticScore: 99,
         capabilities: ["coding", "tool_use"]
       }),
-      rankingModel("fastest:eligible", {
-        codingScore: FASTEST_CODER_MIN_CODING_SCORE,
-        speedScore: 300,
-        capabilities: ["coding"]
-      }),
-      rankingModel("fastest:runner-up", { codingScore: 50, speedScore: 200, capabilities: ["coding"] }),
-      rankingModel("fastest:below-floor", {
-        codingScore: FASTEST_CODER_MIN_CODING_SCORE - 1,
-        speedScore: 500,
-        capabilities: ["coding"]
-      }),
-      rankingModel("fastest:no-speed", { codingScore: 99, speedScore: null, capabilities: ["coding"] }),
       rankingModel("value:best", { codingScore: 80, capabilities: ["coding"], inputPrice: 1, outputPrice: 1 }),
       rankingModel("value:runner-up", { codingScore: 90, capabilities: ["coding"], inputPrice: 2, outputPrice: 2 }),
       rankingModel("value:free", {
@@ -196,20 +244,6 @@ describe("delegation profiles", () => {
     expect(bestAgenticCandidates).not.toContain("agentic:no-structured-output");
     expect(selectBestAgentic(feed)?.id).toBe("agentic:best");
 
-    const fastestCandidates = models
-      .filter(
-        (model) =>
-          model.quality.coding_score !== null &&
-          model.quality.coding_score >= FASTEST_CODER_MIN_CODING_SCORE &&
-          model.quality.speed_score !== null
-      )
-      .sort(compareForFastestCoder)
-      .map((model) => model.id);
-    expect(fastestCandidates.slice(0, 2)).toEqual(["fastest:eligible", "fastest:runner-up"]);
-    expect(fastestCandidates).not.toContain("fastest:below-floor");
-    expect(fastestCandidates).not.toContain("fastest:no-speed");
-    expect(selectFastestCoder(feed)?.id).toBe("fastest:eligible");
-
     const valueCandidates = models
       .filter(
         (model) =>
@@ -246,20 +280,6 @@ describe("delegation profiles", () => {
     expect(ranked).toEqual(["value:genuine", "value:zero-priced"]);
   });
 
-  it("returns no fastest-coder selection when no offering reaches the coding floor", () => {
-    const feed = rankingFeed([
-      rankingModel("fastest:below-floor-a", {
-        codingScore: FASTEST_CODER_MIN_CODING_SCORE - 1,
-        speedScore: 900
-      }),
-      rankingModel("fastest:below-floor-b", {
-        codingScore: FASTEST_CODER_MIN_CODING_SCORE - 10,
-        speedScore: 300
-      })
-    ]);
-
-    expect(selectFastestCoder(feed)).toBeUndefined();
-  });
 });
 
 const FIXTURE_NOW = new Date("2026-07-08T12:30:00.000Z");

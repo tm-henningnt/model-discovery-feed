@@ -28,7 +28,7 @@ All decisions herein were settled with the maintainer on 2026-07-11 (grilling se
 - Cross-provider propagation of model-intrinsic scores.
 - Carry-forward staleness handling for the AA snapshot.
 - Attribution (feed, UI, docs) for AA, Design Arena, and models.dev.
-- Quality-first default ranking; delegation profiles `best-coder`, `best-agentic`, `fastest-coder`,
+- Quality-first default ranking; delegation profiles `best-coder`, `best-agentic`,
   `best-value-coder`; score-aware `best-free-coder`; explorer surfacing; export presets.
 
 **Out of scope:** LMArena/HELM/LiveBench/Epoch integrations (documented as rejected-for-now in the
@@ -134,14 +134,12 @@ collector pipeline (`src/collectors/*`, `scripts/run-collectors.ts`, `src/collec
   context desc → id. Implemented in `src/feed/ranking.ts` and consumed by the explorer (no UI
   re-implementation).
 - **REQ-019**: New feed profiles: `best-coder` (max `coding_score`, requires `tool_use`),
-  `best-agentic` (max `agentic_score`, requires `tool_use` + `structured_output`), `fastest-coder`
-  (max `speed_score` among offerings with `coding_score` ≥ 40), `best-value-coder` (max
-  `coding_score` ÷ blended USD/1M among paid offerings with both prices known). `best-free-coder`
+  `best-agentic` (max `agentic_score`, requires `tool_use` + `structured_output`), `best-value-coder`
+  (max `coding_score` ÷ blended USD/1M among paid offerings with both prices known). `best-free-coder`
   gains score-awareness (score desc inserted before context in its chain).
 - **CON-005**: Blended price = `0.75 × input_usd_per_1m_tokens + 0.25 × output_usd_per_1m_tokens`
   (input-weighted: agentic coding workloads are context-heavy). Recorded as an ADR; used by
   `best-value-coder` and as the REQ-018 price tiebreak (free/zero-priced sorts as 0).
-- **CON-006**: `fastest-coder`'s floor (`coding_score` ≥ 40) is an ADR-recorded constant.
 - **REQ-020**: Profiles are addressable via the existing profile mechanism (API `profile=` filter and
   CLI), and each is exposed as an export preset.
 
@@ -302,9 +300,11 @@ no per-provider-host dimension exists in the payload (verified live 2026-07-11: 
 field anywhere; guessed per-model detail endpoints 404). REQ-013's endpoint-matched speed sourcing
 therefore has no data to draw on: `speed_score` and `benchmarks.ttft_seconds` stay null across the
 entire build. This is accepted, not a defect — REQ-013's "never propagate" rule correctly prevents
-attaching an ambiguous model-level number to any one provider's offering. Direct consequence: the
-`fastest-coder` profile (REQ-019) will always return an empty set until a genuinely per-endpoint
-speed source is integrated (out of scope here). Revisit if/when that matters.
+attaching an ambiguous model-level number to any one provider's offering. Direct consequence: no
+speed-ranked profile can be built until a genuinely per-endpoint speed source is integrated (out of
+scope here). ADR 0010 records the removal of the speed-floor delegation profile REQ-019 originally
+specified, since it always returned an empty set for this reason. Revisit if/when a per-endpoint
+speed source lands.
 
 ## 8. Dependencies & External Integrations
 
@@ -344,7 +344,6 @@ Edge cases:
   enricher to know which offerings propagation will later cover — a cross-stage dependency judged not
   worth the complexity for 6 offerings; revisit if the gap grows materially.
 - Free model in best-value-coder: excluded (kind must be "paid"); free models belong to best-free-coder.
-- fastest-coder with no offering meeting the coding floor: profile returns empty, not a lowered floor.
 - Two OpenRouter variants (`:free` suffix) of one model: both map to the same canonical slug; the
   alias table strips the variant suffix for canonical purposes only.
 - AA sub-benchmark set changes shape: unknown keys are stored verbatim in the map (REQ-005) — no
