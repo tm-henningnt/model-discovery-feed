@@ -33,3 +33,23 @@ Cline's flat-rate subscription provider: a fixed monthly price for a curated ros
 underlying models, not billed per token. Its offerings carry `pricing.kind = "subscription_included"`
 with the underlying model's per-token rate kept only as a cheap-vs-expensive signal (see ADR 0006).
 _Avoid_: Cline (that is the separate pay-as-you-go provider above)
+
+**QwenCloud**:
+Alibaba's international Qwen platform (Singapore) as a pay-as-you-go provider — per-token, per-image, or
+per-second billing over a 250-model marketplace that also resells DeepSeek, GLM, Kimi, and MiniMax
+models. Its roster comes from a public CDN model-id mapping, not a catalog API (see ADR 0007).
+_Avoid_: DashScope, Model Studio, Bailian (former names for the same platform)
+
+**Token Plan**:
+QwenCloud's flat-rate subscription provider: a fixed monthly price for a curated roster, metered in
+**Credits** rather than tokens. Its offerings carry `pricing.kind = "subscription_included"` with
+`metering: "credits"` and **null** per-token rates, because QwenCloud publishes no per-model Credits
+coefficient (see ADR 0007). Sold in two editions, Personal and Team, with different rosters; each
+offering records the editions that include it in `pricing.subscription.plan_editions`.
+_Avoid_: Coding Plan (a separate QwenCloud subscription this feed does not yet ingest), QwenCloud (that
+is the separate pay-as-you-go provider above)
+
+**Plan edition**:
+One price tier of a subscription provider, with its own roster (Token Plan Personal vs Team). An edition
+is a property of the sale, not a provider — the same model in both editions is one offering carrying two
+edition tags.

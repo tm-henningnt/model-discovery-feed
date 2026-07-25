@@ -54,7 +54,11 @@ const modelsDevProviderByProviderId: Record<string, string> = {
   "github-models": "github-models",
   openrouter: "openrouter",
   "opencode-go": "opencode-go",
-  "opencode-zen": "opencode"
+  "opencode-zen": "opencode",
+  // models.dev names the international QwenCloud platform `alibaba` and the subscription roster
+  // `alibaba-token-plan`; both key on the same bare model ids QwenCloud publishes (ADR 0007).
+  qwencloud: "alibaba",
+  "qwencloud-token-plan": "alibaba-token-plan"
 };
 
 /*
@@ -71,7 +75,11 @@ const capabilityGapFillAllowed: Record<string, boolean> = {
   openrouter: false,
   // The OpenCode listing endpoints expose no capability flags, so models.dev is the only source.
   "opencode-go": true,
-  "opencode-zen": true
+  "opencode-zen": true,
+  // The QwenCloud CDN mapping carries no capability flags, and the Token Plan doc column is coarse
+  // (it never mentions tool use), so absence there is a gap rather than a denial.
+  qwencloud: true,
+  "qwencloud-token-plan": true
 };
 
 // Providers whose own API publishes no pricing at all — models.dev is the authoritative source (it is
@@ -83,7 +91,11 @@ const pricingGapFillAllowed: Record<string, boolean> = {
   "opencode-zen": true,
   // The Google generative-language listing carries no pricing; models.dev's `google` cost is Google's
   // own authoritative Gemini API price — same rationale as OpenCode.
-  gemini: true
+  gemini: true,
+  // QwenCloud publishes rates for only a handful of models in its pricing doc; models.dev covers the
+  // rest of the pay-as-you-go catalog. It is NOT enabled for `qwencloud-token-plan`, whose models.dev
+  // cost is a literal 0 (subscription-billed) and would read as free.
+  qwencloud: true
 };
 
 type ModelsDevModel = z.infer<typeof modelsDevModelSchema>;
@@ -182,9 +194,13 @@ function enrichOffering(model: ModelOffering, source: ModelsDevModel, modelsDevP
   const modelsDevInput = toNonNegativeNumber(source.cost?.input);
   const modelsDevOutput = toNonNegativeNumber(source.cost?.output);
 
-  // Gap-fill pricing only for providers whose own API carries none, and only into null fields.
+  // Gap-fill pricing only for providers whose own API carries none, and only into null fields. An
+  // offering the provider bills by another unit (per image, per second of video or audio, per
+  // character) is skipped: models.dev states one number per model, and writing it into the
+  // per-1M-token fields would contradict `pricing.metering`.
   let pricing = model.pricing;
-  if (pricingGapFillAllowed[model.provider.id] === true) {
+  const meteredInTokens = model.pricing.metering === null || model.pricing.metering === "tokens";
+  if (pricingGapFillAllowed[model.provider.id] === true && meteredInTokens) {
     const filledInput = providerInput === null ? modelsDevInput : null;
     const filledOutput = providerOutput === null ? modelsDevOutput : null;
     if (filledInput !== null || filledOutput !== null) {

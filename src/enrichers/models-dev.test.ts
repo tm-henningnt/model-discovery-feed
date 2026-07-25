@@ -49,6 +49,35 @@ const capturedPayloadExcerpt = {
       }
     }
   },
+  alibaba: {
+    models: {
+      "qwen3-coder-plus": {
+        id: "qwen3-coder-plus",
+        name: "Qwen3 Coder Plus",
+        tool_call: true,
+        limit: { context: 1_000_000, output: 65_536 },
+        cost: { input: 1, output: 5 }
+      },
+      "wan2.7-image": {
+        id: "wan2.7-image",
+        name: "Wan 2.7 Image",
+        limit: { context: 8_192, output: 8_192 },
+        cost: { input: 0.03, output: 0.03 }
+      }
+    }
+  },
+  "alibaba-token-plan": {
+    models: {
+      "glm-5.2": {
+        id: "glm-5.2",
+        name: "GLM 5.2",
+        reasoning: true,
+        tool_call: true,
+        limit: { context: 1_000_000, output: 131_072 },
+        cost: { input: 0, output: 0 }
+      }
+    }
+  },
   opencode: {
     models: {
       "deepseek-v4-flash-free": {
@@ -275,6 +304,63 @@ describe("enrichWithModelsDev", () => {
     });
     const claim = result.models[0]?.source_claims.find((c) => c.collector === "models-dev");
     expect(claim?.field_paths).toEqual(expect.arrayContaining(["pricing.kind", "pricing.free"]));
+  });
+
+  it("gap-fills pricing and limits for QwenCloud from the models.dev `alibaba` provider", async () => {
+    const qwencloud = nullPricedOffering("qwencloud", "qwen3-coder-plus");
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [qwencloud], context: context(successfulFetch) });
+
+    expect(result.models[0]?.pricing).toMatchObject({
+      kind: "paid",
+      input_usd_per_1m_tokens: 1,
+      output_usd_per_1m_tokens: 5,
+      currency: "USD"
+    });
+    expect(result.models[0]?.limits).toMatchObject({ context_tokens: 1_000_000 });
+    expect(result.models[0]?.capabilities).toEqual(expect.arrayContaining(["tool_use"]));
+  });
+
+  it("skips pricing gap-fill when the provider bills in a unit other than tokens", async () => {
+    // wan2.7-image is billed per image, so a single models.dev number must not land in the
+    // per-1M-token fields and contradict `pricing.metering`.
+    const image = nullPricedOffering("qwencloud", "wan2.7-image");
+    image.pricing = { ...image.pricing, kind: "paid", metering: "images", currency: "USD" };
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [image], context: context(successfulFetch) });
+
+    expect(result.models[0]?.pricing.input_usd_per_1m_tokens).toBeNull();
+    expect(result.models[0]?.pricing.output_usd_per_1m_tokens).toBeNull();
+    // Non-pricing gap-fill still applies.
+    expect(result.models[0]?.limits).toMatchObject({ context_tokens: 8_192 });
+  });
+
+  it("never gap-fills the Token Plan's zero subscription cost onto its offerings", async () => {
+    const tokenPlan = nullPricedOffering("qwencloud-token-plan", "glm-5.2");
+    tokenPlan.pricing = {
+      ...tokenPlan.pricing,
+      kind: "subscription_included",
+      metering: "credits",
+      subscription: { billing: "flat_monthly", per_token_billed: false, credits_metered: true }
+    };
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [tokenPlan], context: context(successfulFetch) });
+
+    expect(result.models[0]?.pricing).toMatchObject({
+      kind: "subscription_included",
+      input_usd_per_1m_tokens: null,
+      output_usd_per_1m_tokens: null,
+      metering: "credits"
+    });
+    // Capabilities and limits still gap-fill from the subscription roster.
+    expect(result.models[0]?.capabilities).toEqual(expect.arrayContaining(["reasoning", "tool_use"]));
+    expect(result.models[0]?.limits).toMatchObject({ context_tokens: 1_000_000 });
   });
 
   it("does not gap-fill pricing for a provider not on the pricing allow-list", async () => {

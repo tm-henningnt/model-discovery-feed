@@ -194,6 +194,72 @@ export async function fetchJson<T>(
   }
 }
 
+export interface FetchTextSuccess {
+  ok: true;
+  status: number;
+  text: string;
+}
+
+export type FetchTextResult = FetchTextSuccess | FetchJsonFailure;
+
+/**
+ * Fetches a plain-text document. Some providers publish a machine-readable
+ * roster only as Markdown (see ADR 0007), so a text sibling of `fetchJson` is
+ * needed; it keeps the same timeout, abort, and failure shape.
+ */
+export async function fetchText(
+  context: CollectorContext,
+  url: string,
+  init?: RequestInit
+): Promise<FetchTextResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
+  try {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("accept")) {
+      headers.set("accept", "text/plain, text/markdown, */*");
+    }
+
+    const response = await context.fetch(url, {
+      ...init,
+      signal: controller.signal,
+      headers
+    });
+
+    const rawText = await response.text();
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: rawText.trim() || `HTTP ${response.status}`,
+        rawText: rawText || null
+      };
+    }
+
+    if (rawText.trim().length === 0) {
+      return {
+        ok: false,
+        status: response.status,
+        error: "empty response body",
+        rawText: null
+      };
+    }
+
+    return { ok: true, status: response.status, text: rawText };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      error: error instanceof Error ? error.message : "request failed",
+      rawText: null
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function collectorNotice(
   collector: string,
   message: string,

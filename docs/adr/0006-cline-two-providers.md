@@ -3,7 +3,9 @@
 Status: Accepted
 
 See also: ADR 0003 (OpenRouter-slug canonical namespace, which both providers join through) and
-ADR 0004 (cross-provider intrinsic-score propagation, which both providers benefit from).
+ADR 0004 (cross-provider intrinsic-score propagation, which both providers benefit from). ADR 0007
+applies this same two-provider split to QwenCloud, and records why its subscription provider carries no
+reference rate.
 
 ## Context
 

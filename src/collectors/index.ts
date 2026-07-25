@@ -6,6 +6,7 @@ import { groqCollector } from "./groq";
 import { openrouterCollector } from "./openrouter";
 import { opencodeGoCollector, opencodeZenCollector } from "./opencode";
 import { clineCollector, clinePassCollector } from "./cline";
+import { qwencloudCollector, qwencloudTokenPlanCollector } from "./qwencloud";
 import type { Collector, CollectorContext, CollectorResult } from "./types";
 
 export const collectors: Collector[] = [
@@ -16,7 +17,9 @@ export const collectors: Collector[] = [
   opencodeGoCollector,
   opencodeZenCollector,
   clineCollector,
-  clinePassCollector
+  clinePassCollector,
+  qwencloudCollector,
+  qwencloudTokenPlanCollector
 ];
 
 export type CollectorExecution = {

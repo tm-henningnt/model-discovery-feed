@@ -17,7 +17,9 @@ export type CollectorId =
   | "opencode-go"
   | "opencode-zen"
   | "cline"
-  | "cline-pass";
+  | "cline-pass"
+  | "qwencloud"
+  | "qwencloud-token-plan";
 
 export type CollectorNotice = Record<string, unknown>;
 

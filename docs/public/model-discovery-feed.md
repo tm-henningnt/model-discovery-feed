@@ -62,6 +62,19 @@ When `pricing.kind = "free"`, `pricing.free` records:
 - `last_verified_at`
 - `confidence`
 
+### Billing unit
+
+`pricing.metering` names the unit the provider bills in. The rate fields
+`input_usd_per_1m_tokens` and `output_usd_per_1m_tokens` are meaningful only when it is `tokens`:
+
+- `tokens` — per-token billing; the rate fields carry USD per 1M tokens.
+- `credits` — a subscription's own quota unit. Read `pricing.subscription` for the plan facts.
+- `images`, `video_seconds`, `characters`, `audio_seconds` — the provider bills per generated image, per
+  second of output video, per character of input text, or per second of input audio.
+
+An offering can state `pricing.kind = "paid"` with both rate fields `null`. That combination means the
+price is known to exist but is not expressed in tokens; use `metering` to see which unit applies.
+
 ### Quality scores
 
 `quality` carries third-party benchmark scores for an offering, when available. Every field is stored

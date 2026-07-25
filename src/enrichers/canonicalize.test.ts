@@ -136,6 +136,81 @@ describe("canonicalize", () => {
     });
   });
 
+  describe("QwenCloud segment join", () => {
+    function qwencloudOffering(providerId: string, providerModelId: string): ModelOffering {
+      const model = offering(1);
+      model.id = `${providerId}:${providerModelId}`;
+      model.provider = { id: providerId, name: providerId };
+      model.provider_model_id = providerModelId;
+      model.canonical_model = {
+        id: providerModelId,
+        confidence: "medium",
+        knowledge_cutoff: null,
+        release_date: null,
+        open_weights: null
+      };
+      model.endpoint = { ...model.endpoint, model: providerModelId };
+      return model;
+    }
+
+    it("binds a bare model id to the one live OpenRouter slug sharing its segment", async () => {
+      const { canonicalize } = await import("./canonicalize");
+      const live = openrouterOffering("z-ai/glm-5.2");
+      const qwencloud = qwencloudOffering("qwencloud", "glm-5.2");
+      const tokenPlan = qwencloudOffering("qwencloud-token-plan", "glm-5.2");
+
+      const result = canonicalize([live, qwencloud, tokenPlan]);
+
+      expect(result.models[1].canonical_model).toMatchObject({ id: "z-ai/glm-5.2", confidence: "high" });
+      expect(result.models[2].canonical_model).toMatchObject({ id: "z-ai/glm-5.2", confidence: "high" });
+    });
+
+    it("matches case-insensitively", async () => {
+      const { canonicalize } = await import("./canonicalize");
+      const live = openrouterOffering("minimax/minimax-m2.5");
+      const tokenPlan = qwencloudOffering("qwencloud-token-plan", "MiniMax-M2.5");
+
+      expect(canonicalize([live, tokenPlan]).models[1].canonical_model).toMatchObject({
+        id: "minimax/minimax-m2.5",
+        confidence: "high"
+      });
+    });
+
+    it("refuses an ambiguous segment and reports it", async () => {
+      const { canonicalize } = await import("./canonicalize");
+      const first = openrouterOffering("creator-a/shared-model");
+      const second = openrouterOffering("creator-b/shared-model");
+      const qwencloud = qwencloudOffering("qwencloud", "shared-model");
+
+      const result = canonicalize([first, second, qwencloud]);
+
+      expect(result.models[2].canonical_model).toMatchObject({ id: "shared-model", confidence: "medium" });
+      expect(
+        result.notices.filter((notice) => notice.message === "model segment matched more than one OpenRouter creator")
+      ).toEqual([
+        expect.objectContaining({
+          collector: "canonicalize",
+          ambiguous_offerings: [
+            { offering_id: "qwencloud:shared-model", candidates: ["creator-a/shared-model", "creator-b/shared-model"] }
+          ]
+        })
+      ]);
+    });
+
+    it("leaves a QwenCloud-only model at its medium-confidence echo", async () => {
+      const { canonicalize } = await import("./canonicalize");
+      const live = openrouterOffering("z-ai/glm-5.2");
+      const qwencloud = qwencloudOffering("qwencloud", "qwen-vl-ocr");
+
+      const result = canonicalize([live, qwencloud]);
+
+      expect(result.models[1]).toEqual(qwencloud);
+      expect(
+        result.notices.filter((notice) => notice.message === "model segment matched more than one OpenRouter creator")
+      ).toEqual([]);
+    });
+  });
+
   describe("alias staleness notice", () => {
     it("emits one aggregated notice listing every alias target absent from the live OpenRouter catalog", async () => {
       vi.resetModules();
