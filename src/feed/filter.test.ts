@@ -95,6 +95,19 @@ describe("filterModels", () => {
     ]);
   });
 
+  it("hides a retired offering from a filtered list but keeps it resolvable by direct id lookup", () => {
+    const feed = structuredClone(exampleFeed);
+    feed.models[0].availability.status = "retired";
+    feed.models[0].policy.visibility = "hidden";
+
+    const results = filterModels(feed, {});
+    expect(results.find((model) => model.id === feed.models[0].id)).toBeUndefined();
+
+    const byId = feed.models.find((model) => model.id === feed.models[0].id);
+    expect(byId).toBeDefined();
+    expect(byId?.availability.status).toBe("retired");
+  });
+
   it("builds a search haystack including id, display name, provider name, and provider_model_id", () => {
     const model = exampleFeed.models[0];
     expect(modelSearchHaystack(model)).toBe(

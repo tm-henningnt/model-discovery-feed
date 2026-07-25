@@ -30,6 +30,7 @@ Important fields:
 - `model_offering.provider_model_id`, `model_offering.canonical_model`
 - `model_offering.canonical_model.knowledge_cutoff`, `.release_date`, `.open_weights`: model-level metadata gap-filled from models.dev when a provider's own API doesn't supply it
 - `model_offering.endpoint.protocol`, `model_offering.endpoint.base_url`, `model_offering.endpoint.model`
+- `model_offering.endpoint.protocol_options.response_envelope_key`: optional top-level response key to unwrap before parsing as OpenAI chat completion format (describes response shape, not request shape)
 - `model_offering.capabilities`
 - `model_offering.limits.context_tokens`, `model_offering.limits.max_output_tokens`
 - `model_offering.pricing.kind`, `model_offering.pricing.free`
@@ -88,6 +89,36 @@ verbatim in its source's own units — no normalization, no rescaling:
 
 A `null` quality field means unscored, not a zero or a negative judgment. `attributions` names
 the sources these scores come from; carry that attribution forward wherever you surface them.
+
+### Availability
+
+`availability.status` answers one question: does the provider's own catalog currently list this
+offering for sale? It is never a guarantee that your account can call the model. The feed observes
+availability with the feed's own collector credentials. A provider can gate a model by account age,
+region, or plan tier. The feed cannot detect that gating. Treat `available` as "worth trying", not
+as "confirmed to work for you".
+
+The values mean:
+
+- `available` — the provider's catalog lists the offering now.
+- `limited` — the provider lists the offering with a restriction (for example, a waitlist or reduced
+  rate limit).
+- `deprecated` — the offering still answers calls, but it is scheduled to go away. The feed sets
+  this status from a provider-published retirement date in the future, or from a third-party
+  deprecation record when no first-party date exists. A source claim on the offering names which
+  rule fired.
+- `retired` — the offering left the provider's catalog, or its provider-published retirement date
+  has already passed. The feed hides a retired offering from search, facets, and profile ranking at
+  once. A client that already pinned this offering's id can still fetch it by id. The feed removes
+  the offering completely 7 days after `last_success_at`.
+- `blocked` — the feed owner blocked the offering by policy.
+- `unknown` — the offering was absent from one collector run. The feed has not confirmed it is gone.
+
+Use `last_success_at`, not `last_checked_at`, to judge freshness. `last_checked_at` advances on every
+collector run, even a run where the provider's collector failed to fetch anything. `last_success_at`
+advances only when the collector observed the offering in that run. A gap between the two fields
+means the row carried forward from an earlier run without a new observation — check `last_success_at`
+before you trust `available`.
 
 ## Endpoints
 

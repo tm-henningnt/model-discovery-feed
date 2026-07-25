@@ -15,6 +15,7 @@ const modelsDevModelSchema = z
     tool_call: z.unknown().optional(),
     knowledge: z.unknown().optional(),
     release_date: z.unknown().optional(),
+    status: z.unknown().optional(),
     open_weights: z.unknown().optional(),
     limit: z
       .object({
@@ -46,9 +47,10 @@ export type ModelsDevResponse = z.infer<typeof modelsDevResponseSchema>;
 export type ModelsDevEnrichmentResult = {
   models: ModelOffering[];
   notices: CollectorNotice[];
+  catalog: ModelsDevResponse | null;
 };
 
-const modelsDevProviderByProviderId: Record<string, string> = {
+export const modelsDevProviderByProviderId: Record<string, string> = {
   gemini: "google",
   groq: "groq",
   "github-models": "github-models",
@@ -98,7 +100,7 @@ const pricingGapFillAllowed: Record<string, boolean> = {
   qwencloud: true
 };
 
-type ModelsDevModel = z.infer<typeof modelsDevModelSchema>;
+export type ModelsDevModel = z.infer<typeof modelsDevModelSchema>;
 
 function responseBody(value: unknown): ModelsDevResponse | null {
   const result = modelsDevResponseSchema.safeParse(value);
@@ -310,7 +312,8 @@ export async function enrichWithModelsDev(options: {
           status: response.status,
           error: response.error
         })
-      ]
+      ],
+      catalog: null
     };
   }
 
@@ -320,7 +323,8 @@ export async function enrichWithModelsDev(options: {
       models: options.models,
       notices: [
         collectorNotice(MODELS_DEV_COLLECTOR_ID, "models.dev response invalid", { status: response.status })
-      ]
+      ],
+      catalog: null
     };
   }
 
@@ -339,5 +343,5 @@ export async function enrichWithModelsDev(options: {
     return enriched.model;
   });
 
-  return { models, notices };
+  return { models, notices, catalog: body };
 }

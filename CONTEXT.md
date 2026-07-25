@@ -53,3 +53,11 @@ is the separate pay-as-you-go provider above)
 One price tier of a subscription provider, with its own roster (Token Plan Personal vs Team). An edition
 is a property of the sale, not a provider — the same model in both editions is one offering carrying two
 edition tags.
+
+**Availability**:
+Whether a consumer can still buy an offering from its provider. The status `available` means the provider currently lists the offering. The status does not claim the offering will answer requests. It does not guarantee any consumer can access it — providers can gate by region, account age, or plan. An offering that leaves the catalog becomes `retired` and stays in the feed for 7 days (see ADR 0008).
+_Avoid_: uptime, liveness, health (these suggest active monitoring the feed does not perform)
+
+**Capability**:
+What kind of work an offering supports: `coding`, `vision`, `tool_use`, and others. A capability does not rate performance. Quality ratings live in the `quality` field. A consumer selects the best coder by sorting `quality.coding_score`, not by the `coding` capability. The feed derives capabilities from positive evidence and records the source rule (see ADR 0009).
+_Avoid_: skill, strength, rating (these suggest degree rather than kind)

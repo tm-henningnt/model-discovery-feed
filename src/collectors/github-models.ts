@@ -5,7 +5,6 @@ import {
   cleanCapabilityList,
   collectorNotice,
   fetchJson,
-  hasAnyKeyword,
   nowIso,
   normalizeText,
   toPositiveInt
@@ -72,9 +71,6 @@ function normalizeGitHubModel(raw: GitHubModel, observedAt: string, index: numbe
   }
   if (supportedInputModalities.includes("image") || supportedOutputModalities.includes("image")) {
     capabilityCandidates.add("vision");
-  }
-  if (hasAnyKeyword(providerModelId, ["coder", "code", "coding"]) || hasAnyKeyword(name, ["coder", "code", "coding"]) || hasAnyKeyword(description ?? "", ["coder", "code", "coding"])) {
-    capabilityCandidates.add("coding");
   }
   if (Array.isArray(raw.tags) && raw.tags.some((tag) => tag === "structured-output")) {
     capabilityCandidates.add("structured_output");
@@ -176,14 +172,12 @@ function normalizeGitHubModel(raw: GitHubModel, observedAt: string, index: numbe
     ],
     policy: {
       visibility: "listed",
-      tags: Array.from(
-        new Set(
-          [
-            Array.isArray(raw.tags) ? raw.tags.find((tag) => tag === "multipurpose" || tag === "multilingual" || tag === "multimodal") ?? null : null,
-            hasAnyKeyword(providerModelId, ["coder", "code", "coding"]) ? "coding" : null
-          ].filter((item): item is string => Boolean(item))
-        )
-      ),
+      tags: (() => {
+        const modalityTag = Array.isArray(raw.tags)
+          ? raw.tags.find((tag) => tag === "multipurpose" || tag === "multilingual" || tag === "multimodal") ?? null
+          : null;
+        return modalityTag ? [modalityTag] : [];
+      })(),
       recommended_for_agentic_workflows: capabilityCandidates.has("tool_use") || capabilityCandidates.has("structured_output") ? true : null
     }
   };

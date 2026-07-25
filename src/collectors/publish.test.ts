@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { exampleFeed } from "../feed/fixture";
 import type { FeedDocument, ModelOffering, Provider } from "../feed/schema";
+import { validateFeedDocument } from "../feed/schema";
 import { mergeCollectorFeed } from "./index";
 import { runCollectorsAndPublish, type PrismaPublishClient } from "./publish";
 import type { Collector, CollectorContext, CollectorNotice } from "./types";
@@ -172,6 +173,13 @@ function createFakePrisma(
         };
         state.feedReleases.push(record);
         return record;
+      },
+      async findFirst({ where }) {
+        return (
+          state.feedReleases
+            .filter((release) => release.status === where.status)
+            .sort((left, right) => right.generatedAt.getTime() - left.generatedAt.getTime())[0] ?? null
+        );
       }
     },
     state
@@ -461,5 +469,235 @@ describe("runCollectorsAndPublish", () => {
       validation_error: "feed validation failed: unknown provider id: missing-provider"
     });
     expect(prisma.state.feedReleases).toEqual([previousRelease]);
+  });
+
+  it("excludes models from the base feed that are not in the collector list", () => {
+    const generatedAt = new Date("2026-07-08T18:30:00.000Z");
+    const baseFeedWithFixtureModel = structuredClone(exampleFeed);
+    const newProvider = cloneProvider("new-provider", "New Provider");
+    const newModel = cloneModel("new-provider:new-model", newProvider);
+
+    const merged = mergeCollectorFeed(
+      baseFeedWithFixtureModel,
+      [newProvider],
+      [newModel],
+      [],
+      generatedAt
+    );
+
+    expect(merged.models).toHaveLength(1);
+    expect(merged.models[0]).toMatchObject({
+      id: "new-provider:new-model",
+      provider: { id: "new-provider" }
+    });
+    expect(merged.models.find((m) => m.id === "openrouter:qwen/qwen3-coder:free")).toBeUndefined();
+  });
+
+  it("excludes providers from the base feed that are not in the collector list", () => {
+    const generatedAt = new Date("2026-07-08T18:30:00.000Z");
+    const baseFeedWithFixtureProviders = structuredClone(exampleFeed);
+    const newProvider = cloneProvider("new-provider", "New Provider");
+    const newModel = cloneModel("new-provider:new-model", newProvider);
+
+    const merged = mergeCollectorFeed(
+      baseFeedWithFixtureProviders,
+      [newProvider],
+      [newModel],
+      [],
+      generatedAt
+    );
+
+    expect(merged.providers).toHaveLength(1);
+    expect(merged.providers[0]).toMatchObject({
+      id: "new-provider",
+      name: "New Provider"
+    });
+    expect(merged.providers.find((p) => p.id === "openrouter")).toBeUndefined();
+    expect(merged.providers.find((p) => p.id === "groq")).toBeUndefined();
+  });
+
+  it("uses the collector's version when both base feed and collector contain the same model", () => {
+    const generatedAt = new Date("2026-07-08T18:30:00.000Z");
+    const baseFeed = structuredClone(exampleFeed);
+    const fixtureModel = baseFeed.models[0]!;
+
+    const collectorProvider = cloneProvider(fixtureModel.provider.id, fixtureModel.provider.name);
+    const collectorModel = {
+      ...structuredClone(fixtureModel),
+      display_name: "Updated Display Name from Collector"
+    };
+
+    const merged = mergeCollectorFeed(
+      baseFeed,
+      [collectorProvider],
+      [collectorModel],
+      [],
+      generatedAt
+    );
+
+    const mergedModel = merged.models.find((m) => m.id === fixtureModel.id);
+    expect(mergedModel).toBeDefined();
+    expect(mergedModel?.display_name).toBe("Updated Display Name from Collector");
+  });
+
+  it("preserves base feed schema_version, attributions, and default_stale_after_seconds", () => {
+    const generatedAt = new Date("2026-07-08T18:30:00.000Z");
+    const baseFeed = structuredClone(exampleFeed);
+    const newProvider = cloneProvider("test-provider", "Test Provider");
+    const newModel = cloneModel("test-provider:test-model", newProvider);
+
+    const merged = mergeCollectorFeed(
+      baseFeed,
+      [newProvider],
+      [newModel],
+      [],
+      generatedAt
+    );
+
+    expect(merged.schema_version).toBe(baseFeed.schema_version);
+    expect(merged.attributions).toEqual(baseFeed.attributions);
+    expect(merged.feed.default_stale_after_seconds).toBe(baseFeed.feed.default_stale_after_seconds);
+  });
+
+  it("produces a valid feed document when merged with collector-supplied models matching profiles", () => {
+    const generatedAt = new Date("2026-07-08T18:30:00.000Z");
+    const baseFeed = structuredClone(exampleFeed);
+    const fixtureProvider = baseFeed.providers[0]!;
+    const fixtureModel = baseFeed.models[0]!;
+
+    const merged = mergeCollectorFeed(
+      baseFeed,
+      [fixtureProvider],
+      [fixtureModel],
+      [],
+      generatedAt
+    );
+
+    expect(() => validateFeedDocument(merged)).not.toThrow();
+    expect(merged.models).toHaveLength(1);
+    expect(merged.providers).toHaveLength(1);
+  });
+
+  it("keeps the first of two offerings sharing an id and records the collision", () => {
+    const generatedAt = new Date("2026-07-08T18:30:00.000Z");
+    const baseFeed = structuredClone(exampleFeed);
+    const provider = cloneProvider("dup-provider", "Dup Provider");
+    const first = cloneModel("dup-provider:same-id", provider);
+    const second = cloneModel("dup-provider:same-id", provider);
+    first.pricing = { ...first.pricing, kind: "paid" };
+    second.pricing = { ...second.pricing, kind: "free" };
+
+    const merged = mergeCollectorFeed(baseFeed, [provider], [first, second], [], generatedAt);
+
+    // Cline's catalog really does list one model twice with conflicting
+    // pricing. Last-write-wins would let an upstream reordering publish a paid
+    // model as free.
+    expect(merged.models).toHaveLength(1);
+    expect(merged.models[0]!.pricing.kind).toBe("paid");
+    expect(merged.notices).toContainEqual(
+      expect.objectContaining({
+        collector: "feed-merge",
+        message: "duplicate offering id: kept the first, discarded the rest",
+        model_offering_id: "dup-provider:same-id",
+        kept_pricing_kind: "paid",
+        discarded_pricing_kind: "free"
+      })
+    );
+  });
+
+  it("drops a base-feed profile whose selected offering is not in the collector output", () => {
+    const generatedAt = new Date("2026-07-08T18:30:00.000Z");
+    const baseFeed = structuredClone(exampleFeed);
+    const selectedId = baseFeed.profiles[0]!.selection.model_offering_id;
+    const newProvider = cloneProvider("new-provider", "New Provider");
+    const newModel = cloneModel("new-provider:new-model", newProvider);
+
+    const merged = mergeCollectorFeed(baseFeed, [newProvider], [newModel], [], generatedAt);
+
+    // The fixture profile selects a fixture offering that no collector produces.
+    // Carrying it over would fail the schema's cross-object invariant.
+    expect(baseFeed.profiles).not.toHaveLength(0);
+    expect(merged.models.some((model) => model.id === selectedId)).toBe(false);
+    expect(merged.profiles).toHaveLength(0);
+    expect(() => validateFeedDocument(merged)).not.toThrow();
+    expect(merged.notices).toContainEqual(
+      expect.objectContaining({
+        collector: "feed-merge",
+        message: "profile dropped: selected offering not in collector output",
+        model_offering_id: selectedId
+      })
+    );
+  });
+
+  it("keeps a base-feed profile whose selected offering is in the collector output", () => {
+    const generatedAt = new Date("2026-07-08T18:30:00.000Z");
+    const baseFeed = structuredClone(exampleFeed);
+    const fixtureProvider = baseFeed.providers[0]!;
+    const fixtureModel = baseFeed.models.find(
+      (model) => model.id === baseFeed.profiles[0]!.selection.model_offering_id
+    )!;
+
+    const merged = mergeCollectorFeed(baseFeed, [fixtureProvider], [fixtureModel], [], generatedAt);
+
+    expect(merged.profiles).toHaveLength(baseFeed.profiles.length);
+    expect(() => validateFeedDocument(merged)).not.toThrow();
+  });
+});
+
+describe("runCollectorsAndPublish availability lifecycle (ADR 0008)", () => {
+  it("carries an offering that disappeared from the collector output forward as unknown, using the previous published release as baseline", async () => {
+    const previousNow = new Date("2026-07-24T03:17:00.000Z");
+    const now = new Date("2026-07-25T03:17:00.000Z");
+    const openrouterProvider = cloneProvider("openrouter", "OpenRouter");
+
+    const survivorPrevious = cloneModel("openrouter:survivor", openrouterProvider);
+    survivorPrevious.availability = {
+      status: "available",
+      last_checked_at: previousNow.toISOString(),
+      last_success_at: previousNow.toISOString(),
+      stale_after_seconds: 86400
+    };
+    const goneModel = cloneModel("openrouter:gone", openrouterProvider);
+    goneModel.availability = {
+      status: "available",
+      last_checked_at: previousNow.toISOString(),
+      last_success_at: previousNow.toISOString(),
+      stale_after_seconds: 86400
+    };
+
+    const previousFeed = validateFeedDocument({
+      ...structuredClone(exampleFeed),
+      providers: [openrouterProvider],
+      models: [survivorPrevious, goneModel],
+      profiles: []
+    });
+
+    const prisma = createFakePrisma([
+      {
+        id: "feed-release-seed",
+        status: "published",
+        generatedAt: previousNow,
+        sourceRevision: "collector-run-seed",
+        snapshotJson: previousFeed
+      }
+    ]);
+
+    const survivorCurrent = cloneModel("openrouter:survivor", openrouterProvider);
+
+    const published = await runCollectorsAndPublish({
+      context: createContext(now),
+      prisma,
+      collectors: [createCollector("openrouter", openrouterProvider, [survivorCurrent])]
+    });
+
+    const survivor = published.models.find((model) => model.id === "openrouter:survivor");
+    const gone = published.models.find((model) => model.id === "openrouter:gone");
+
+    expect(survivor?.availability.status).toBe("available");
+    expect(survivor?.availability.last_success_at).toBe(now.toISOString());
+    expect(gone?.availability.status).toBe("unknown");
+    expect(gone?.availability.last_checked_at).toBe(now.toISOString());
+    expect(gone?.availability.last_success_at).toBe(previousNow.toISOString());
+    expect(gone?.policy.visibility).toBe("listed");
   });
 });

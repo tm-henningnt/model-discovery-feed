@@ -1,5 +1,5 @@
 import type { ModelOffering, Provider } from "../feed/schema";
-import type { Collector, CollectorContext, CollectorResult } from "./types";
+import type { Collector, CollectorContext, CollectorNotice, CollectorResult } from "./types";
 import {
   claim,
   cleanCapabilityList,
@@ -50,7 +50,12 @@ const provider: Provider = {
   source_claims: []
 };
 
-async function listGeminiModels(context: CollectorContext): Promise<GeminiModel[]> {
+type GeminiPaginationResult = {
+  models: GeminiModel[];
+  notices: CollectorNotice[];
+};
+
+async function listGeminiModels(context: CollectorContext): Promise<GeminiPaginationResult> {
   const apiKey = normalizeText(context.env.GEMINI_API_KEY);
   const models: GeminiModel[] = [];
   let pageToken: string | null = null;
@@ -67,18 +72,28 @@ async function listGeminiModels(context: CollectorContext): Promise<GeminiModel[
 
     const response = await fetchJson<GeminiResponse>(context, url.toString());
     if (!response.ok) {
-      return models;
+      // Pagination stopped early on a mid-run HTTP failure. The pages already
+      // fetched are real data, so keep them, but a caller must not read this
+      // partial roster as a mass retirement with no failure signal.
+      return {
+        models,
+        notices: [
+          collectorNotice("gemini", "collector unavailable: pagination stopped early after an HTTP failure", {
+            pages_succeeded: page
+          })
+        ]
+      };
     }
 
     const pageModels = Array.isArray(response.data.models) ? response.data.models : [];
     models.push(...pageModels);
     if (!response.data.nextPageToken) {
-      return models;
+      return { models, notices: [] };
     }
     pageToken = response.data.nextPageToken;
   }
 
-  return models;
+  return { models, notices: [] };
 }
 
 function normalizeGeminiModel(raw: GeminiModel, observedAt: string, index: number): ModelOffering | null {
@@ -198,24 +213,27 @@ export const geminiCollector: Collector = {
   id: "gemini",
   async collect(context: CollectorContext): Promise<CollectorResult> {
     const observedAt = nowIso(context);
-    const rawModels = await listGeminiModels(context);
+    const { models: rawModels, notices: paginationNotices } = await listGeminiModels(context);
 
     if (rawModels.length === 0) {
       return {
         provider,
         models: [],
-        notices: [
-          collectorNotice("gemini", "collector unavailable or returned no models", {
-            has_api_key: Boolean(normalizeText(context.env.GEMINI_API_KEY))
-          })
-        ]
+        notices:
+          paginationNotices.length > 0
+            ? paginationNotices
+            : [
+                collectorNotice("gemini", "collector unavailable or returned no models", {
+                  has_api_key: Boolean(normalizeText(context.env.GEMINI_API_KEY))
+                })
+              ]
       };
     }
 
     return {
       provider,
       models: rawModels.map((raw, index) => normalizeGeminiModel(raw, observedAt, index)).filter((model): model is ModelOffering => model !== null),
-      notices: []
+      notices: paginationNotices
     };
   }
 };

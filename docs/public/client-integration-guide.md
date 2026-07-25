@@ -1,6 +1,6 @@
 # Client Integration Guide for the Model Discovery Feed
 
-Last updated: 2026-07-09
+Last updated: 2026-07-25
 
 This document gives client, editor, and automation tool authors the information needed to build an adapter around the Model Discovery Feed API.
 
@@ -233,6 +233,16 @@ type Provider = {
 Model offering:
 
 ```ts
+type ModelEndpoint = {
+  protocol: string;
+  base_url: string | null;
+  model: string;
+  protocol_options?: {
+    response_envelope_key?: string | null;
+    [key: string]: unknown;
+  };
+};
+
 type ModelOffering = {
   id: string;
   object: "model_offering";
@@ -258,6 +268,86 @@ carries `coding_score`, `reasoning_score`, `agentic_score`, `speed_score` (third
 scores in their source's own units, verbatim — never normalized; `null` means unscored, not zero) and
 a `benchmarks` object with sub-benchmark detail. `/v1/schema` has the full, authoritative shape of
 both.
+
+### Availability semantics
+
+`availability.status` reports provider catalog membership, not per-account callability:
+
+- `available` — the provider's catalog lists the offering now.
+- `limited` — the provider lists the offering with a restriction (waitlist, reduced rate limit).
+- `deprecated` — the offering is still callable, but it is scheduled to go away. The feed sets this
+  status from a provider-published retirement date in the future, or from a third-party deprecation
+  record when the provider itself publishes no date. Check the offering's source claims to see
+  which rule fired.
+- `retired` — the offering left the provider's catalog, or its provider-published retirement date has
+  already passed. It stays fetchable at `GET /v1/models/{id}` for 7 days after `last_success_at`, but
+  `GET /v1/models` and `available=true` stop returning it immediately.
+- `blocked` — the feed owner blocked the offering by policy.
+- `unknown` — the offering was absent from one collector run; not yet confirmed gone.
+
+Read `last_success_at` as the freshness field, not `last_checked_at`. `last_checked_at` advances on
+every collector run, even a run where the provider's collector failed. `last_success_at` advances only
+when the collector actually observed the offering that run. When the two fields differ, the row
+carried forward without a new observation — do not read a fresh `last_checked_at` as proof the
+offering is confirmed available.
+
+`available` never guarantees a call succeeds for your account. The feed checks availability with its
+own collector credentials. A provider can gate a model by account age, region, or plan tier that the
+feed's credentials do not have. Handle a rejected call from a provider even when the feed says
+`available`.
+
+### Capabilities state kind, not degree
+
+A capability says what kind of work an offering supports. It never says how well the offering does
+that work. `coding` means the offering supports code generation. It does not mean the offering is
+good at it.
+
+Rank by score, filter by capability. To find the best coder, filter on the `coding` capability, then
+sort on `quality.coding_score` descending. Do not treat the capability as a quality signal, and do
+not treat a missing capability as proof the model cannot do the work.
+
+The feed derives `coding` from positive evidence: a benchmark coding score, or a coding keyword in
+the offering's id, display name, or description. An offering with neither stays unflagged, because
+the feed does not claim what it cannot source. A source claim on each flagged offering names the
+rule that fired.
+
+`quality.coding_score` is `null` for an unscored offering. `null` means unmeasured, not zero. Sort
+unscored offerings last rather than treating them as the worst.
+
+### Response shape handling
+
+`endpoint.protocol` describes the request shape, not the response shape. Some providers wrap their response under a top-level key. Use `response_envelope_key` to unwrap it.
+
+When `response_envelope_key` is present:
+
+1. Read the value at that key from the HTTP response body.
+2. Parse the unwrapped value as an OpenAI chat completion object.
+
+Example: Cline wraps responses under `data`. Success has shape:
+
+```json
+{
+  "data": {
+    "choices": [...],
+    "model": "...",
+    "usage": {...}
+  },
+  "success": true
+}
+```
+
+Unwrap to: `{ "choices": [...], "model": "...", "usage": {...} }` before parsing as OpenAI.
+
+An error response does not use the envelope key. It is not an OpenAI error object either:
+
+```json
+{
+  "error": "model not found",
+  "success": false
+}
+```
+
+The `error` value is a plain string. It is not an object with `message` and `code`. Check `success` before you unwrap. When `success` is `false`, read `error` as a string.
 
 ## 7. Adapter Boundary
 

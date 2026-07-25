@@ -88,9 +88,6 @@ function normalizeGroqModel(raw: GroqModel, observedAt: string, index: number): 
     capabilityCandidates.add("vision");
   }
 
-  if (hasAnyKeyword(providerModelId, ["coder", "code", "coding"]) || hasAnyKeyword(name, ["coder", "code", "coding"]) || hasAnyKeyword(description ?? "", ["coder", "code", "coding"])) {
-    capabilityCandidates.add("coding");
-  }
   if (hasAnyKeyword(providerModelId, ["reasoning"]) || hasAnyKeyword(name, ["reasoning"]) || hasAnyKeyword(description ?? "", ["reasoning"])) {
     capabilityCandidates.add("reasoning");
   }
@@ -192,7 +189,6 @@ function normalizeGroqModel(raw: GroqModel, observedAt: string, index: number): 
       tags: Array.from(
         new Set(
           [
-            hasAnyKeyword(providerModelId, ["coder", "code", "coding"]) ? "coding" : null,
             hasAnyKeyword(providerModelId, ["reasoning"]) ? "reasoning" : null
           ].filter((item): item is string => Boolean(item))
         )

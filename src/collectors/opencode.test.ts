@@ -64,7 +64,7 @@ describe("opencodeGoCollector", () => {
     expect(authorization).toBe("Bearer oc_test_key");
   });
 
-  it("normalizes every model and derives coding/reasoning capabilities from the id", async () => {
+  it("normalizes every model and derives reasoning capabilities from the id", async () => {
     const result = await opencodeGoCollector.collect(createContext({ body: goResponse }));
 
     expect(result.models.map((model) => model.id)).toEqual([
@@ -75,7 +75,10 @@ describe("opencodeGoCollector", () => {
 
     const kimi = result.models.find((model) => model.id === "opencode-go:kimi-k2.7-code");
     expect(kimi?.provider.id).toBe("opencode-go");
-    expect(kimi?.capabilities).toEqual(expect.arrayContaining(["chat", "streaming", "tool_use", "coding"]));
+    expect(kimi?.capabilities).toEqual(expect.arrayContaining(["chat", "streaming", "tool_use"]));
+    // ADR 0009: `coding` is no longer inferred here. It moved to the
+    // derive-coding-capability pipeline stage — see derive-coding-capability.test.ts.
+    expect(kimi?.capabilities).not.toContain("coding");
     expect(kimi?.pricing.kind).toBe("subscription_included");
     expect(kimi?.pricing.subscription).toMatchObject({
       billing: "flat_monthly",

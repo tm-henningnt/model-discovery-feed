@@ -174,7 +174,7 @@ export function selectDelegationProfile(
 
 function scoreAvailability(model: ModelOffering): number {
   if (model.availability.status === "available") return 2;
-  if (model.availability.status === "limited") return 1;
+  if (model.availability.status === "limited" || model.availability.status === "deprecated") return 1;
   return 0;
 }
 

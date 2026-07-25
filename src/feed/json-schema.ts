@@ -32,6 +32,8 @@ export const feedJsonSchema = {
   },
   $defs: {
     capability: {
+      description:
+        "What kind of work an offering supports, never how well it does it (ADR 0009). Degree lives in `quality`: sort on quality.coding_score to rank coders, do not filter on the coding capability. The feed derives a capability from positive evidence and records the rule in a source claim.",
       enum: [
         "chat",
         "coding",
@@ -78,7 +80,9 @@ export const feedJsonSchema = {
       ]
     },
     availability_status: {
-      enum: ["available", "limited", "degraded", "deprecated", "retired", "blocked", "unknown"]
+      enum: ["available", "limited", "degraded", "deprecated", "retired", "blocked", "unknown"],
+      description:
+        "Whether a consumer can still buy this offering (ADR 0008). 'available': the provider's catalog currently lists it. 'deprecated': still callable, but a provider retirement date or a third-party record says it is going away. 'retired': gone from the provider's catalog, or past its retirement date; hidden from listings but resolvable by id for 7 days after last_success_at. 'unknown': missing from the most recent collector run but not yet confirmed gone. Availability is observed with the feed's own collector credentials, so 'available' is never a guarantee for a given consumer's key."
     },
     confidence: {
       enum: ["high", "medium", "low"]
@@ -212,7 +216,16 @@ export const feedJsonSchema = {
         protocol: { $ref: "#/$defs/endpoint_protocol" },
         base_url: { type: ["string", "null"], format: "uri" },
         model: { type: "string", minLength: 1 },
-        protocol_options: { type: "object", additionalProperties: true }
+        protocol_options: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            response_envelope_key: {
+              type: ["string", "null"],
+              description: "Top-level response key to unwrap before parsing the body as an OpenAI chat completion. When present, extract the value at this key from the response before standard parsing. Cline responses are wrapped under the 'data' key."
+            }
+          }
+        }
       }
     },
     limits: {
@@ -298,8 +311,17 @@ export const feedJsonSchema = {
       additionalProperties: true,
       properties: {
         status: { $ref: "#/$defs/availability_status" },
-        last_checked_at: { type: ["string", "null"], format: "date-time" },
-        last_success_at: { type: ["string", "null"], format: "date-time" },
+        last_checked_at: {
+          type: ["string", "null"],
+          format: "date-time",
+          description: "When the feed last attempted an observation, including a run whose collector failed."
+        },
+        last_success_at: {
+          type: ["string", "null"],
+          format: "date-time",
+          description:
+            "When the feed last observed this offering in the provider's catalog. Use this field to judge freshness. A gap from last_checked_at means the row carried forward without a new observation."
+        },
         stale_after_seconds: { type: ["integer", "null"], minimum: 1 }
       }
     },

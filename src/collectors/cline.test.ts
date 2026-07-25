@@ -109,7 +109,10 @@ describe("clineCollector", () => {
     expect(glm?.capabilities).toEqual(expect.arrayContaining(["tool_use", "structured_output", "reasoning"]));
 
     const kimi = result.models.find((m) => m.id === "cline:moonshotai/kimi-k2.7-code");
-    expect(kimi?.capabilities).toEqual(expect.arrayContaining(["vision", "coding"]));
+    expect(kimi?.capabilities).toEqual(expect.arrayContaining(["vision"]));
+    // ADR 0009: the `coding` capability is no longer inferred here. It moved to the
+    // derive-coding-capability pipeline stage — see derive-coding-capability.test.ts.
+    expect(kimi?.capabilities).not.toContain("coding");
 
     const free = result.models.find((m) => m.id === "cline:tencent/hy3:free");
     expect(free?.pricing.kind).toBe("free");
@@ -136,6 +139,15 @@ describe("clineCollector", () => {
     expect(result.notices).toEqual([
       expect.objectContaining({ collector: "cline", message: "collector unavailable", status: 503 })
     ]);
+  });
+
+  it("emits response_envelope_key in protocol_options for every offering", async () => {
+    const result = await clineCollector.collect(createContext({}));
+
+    result.models.forEach((model) => {
+      expect(model.endpoint.protocol_options).toBeDefined();
+      expect(model.endpoint.protocol_options?.response_envelope_key).toBe("data");
+    });
   });
 });
 
@@ -212,6 +224,15 @@ describe("clinePassCollector", () => {
     );
     expect(result.models).toEqual([]);
     expect(result.notices).toEqual([]);
+  });
+
+  it("emits response_envelope_key in protocol_options for every offering", async () => {
+    const result = await clinePassCollector.collect(createContext({}));
+
+    result.models.forEach((model) => {
+      expect(model.endpoint.protocol_options).toBeDefined();
+      expect(model.endpoint.protocol_options?.response_envelope_key).toBe("data");
+    });
   });
 });
 

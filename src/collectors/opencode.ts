@@ -32,7 +32,6 @@ type OpenCodeVariant = {
   billing: "subscription" | "metered";
 };
 
-const CODING_KEYWORDS = ["coder", "code", "coding", "codex"];
 const REASONING_KEYWORDS = ["reasoning", "think", "reason"];
 
 const goVariant: OpenCodeVariant = {
@@ -99,9 +98,6 @@ function normalizeOpenCodeModel(
   const providerId = variant.provider.id;
   const name = titleCaseFromSlug(providerModelId);
   const capabilityCandidates = new Set<string>(["chat", "streaming", "tool_use"]);
-  if (hasAnyKeyword(providerModelId, CODING_KEYWORDS)) {
-    capabilityCandidates.add("coding");
-  }
   if (hasAnyKeyword(providerModelId, REASONING_KEYWORDS)) {
     capabilityCandidates.add("reasoning");
   }
@@ -196,7 +192,6 @@ function normalizeOpenCodeModel(
       tags: Array.from(
         new Set(
           [
-            hasAnyKeyword(providerModelId, CODING_KEYWORDS) ? "coding" : null,
             hasAnyKeyword(providerModelId, REASONING_KEYWORDS) ? "reasoning" : null
           ].filter((item): item is string => Boolean(item))
         )

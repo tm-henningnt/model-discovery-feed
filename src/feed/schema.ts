@@ -137,7 +137,12 @@ export const modelOfferingSchema = z
         protocol: endpointProtocolSchema,
         base_url: z.string().url().nullable(),
         model: z.string().min(1),
-        protocol_options: z.record(z.unknown()).optional()
+        protocol_options: z
+          .object({
+            response_envelope_key: z.string().nullable().optional()
+          })
+          .passthrough()
+          .optional()
       })
       .passthrough(),
     capabilities: z.array(capabilitySchema),

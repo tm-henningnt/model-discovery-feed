@@ -250,6 +250,9 @@ export const CANONICAL_ALIASES: Record<string, string> = {
 - **AC-003**: Given an offering whose provider API reports no `tool_use` but models.dev says
   `tool_call: true`, when enrichment runs, then `tool_use` is added ONLY if the provider field was
   absent/empty for that capability dimension, and never removed.
+  AC-003 governs models.dev gap-filling only. The `coding` capability is separate: ADR 0009 makes one
+  pipeline stage authoritative for it, so that stage both adds and removes `coding`. No collector
+  derives `coding`, and models.dev publishes no code-capability field.
 - **AC-004**: Given the AA fetch fails in publish mode with a 5-day-old persisted snapshot, when the
   pipeline runs, then scores are published from the snapshot with original `observed_at` and no
   staleness notice; given the snapshot is 8 days old, a staleness notice is present.

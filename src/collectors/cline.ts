@@ -113,10 +113,7 @@ function deriveCapabilities(
   supportedParameters: string[],
   inputModalities: string[],
   outputModalities: string[],
-  reasoningMandatory: boolean | null | undefined,
-  id: string,
-  name: string,
-  description: string | null
+  reasoningMandatory: boolean | null | undefined
 ): Set<string> {
   const capabilities = new Set<string>(["chat", "streaming"]);
   if (supportedParameters.some((item) => ["tools", "tool_choice"].includes(item))) {
@@ -131,17 +128,14 @@ function deriveCapabilities(
   if (inputModalities.some((item) => item === "image") || outputModalities.some((item) => item === "image")) {
     capabilities.add("vision");
   }
-  if (hasAnyKeyword(id, ["coder", "code", "coding"]) || hasAnyKeyword(name, ["coder", "code", "coding"]) || hasAnyKeyword(description ?? "", ["coder", "code", "coding"])) {
-    capabilities.add("coding");
-  }
   return capabilities;
 }
 
-function catalogCapabilities(raw: ClineCatalogModel, name: string, description: string | null): Set<string> {
+function catalogCapabilities(raw: ClineCatalogModel): Set<string> {
   const supportedParameters = Array.isArray(raw.supported_parameters) ? raw.supported_parameters : [];
   const inputModalities = raw.architecture && Array.isArray(raw.architecture.input_modalities) ? raw.architecture.input_modalities : [];
   const outputModalities = raw.architecture && Array.isArray(raw.architecture.output_modalities) ? raw.architecture.output_modalities : [];
-  return deriveCapabilities(supportedParameters, inputModalities, outputModalities, raw.reasoning?.mandatory, raw.id, name, description);
+  return deriveCapabilities(supportedParameters, inputModalities, outputModalities, raw.reasoning?.mandatory);
 }
 
 function normalizeClineCatalogModel(raw: ClineCatalogModel, observedAt: string, index: number): ModelOffering | null {
@@ -154,7 +148,7 @@ function normalizeClineCatalogModel(raw: ClineCatalogModel, observedAt: string, 
   const description = normalizeText(raw.description);
   const contextTokens = toPositiveInt(raw.context_length);
   const maxOutputTokens = toPositiveInt(raw.top_provider?.max_completion_tokens);
-  const capabilities = catalogCapabilities(raw, name, description);
+  const capabilities = catalogCapabilities(raw);
 
   const promptPrice = usdPerMillionTokens(raw.pricing?.prompt);
   const completionPrice = usdPerMillionTokens(raw.pricing?.completion);
@@ -183,7 +177,10 @@ function normalizeClineCatalogModel(raw: ClineCatalogModel, observedAt: string, 
     endpoint: {
       protocol: "openai_chat_completions",
       base_url: clineProvider.default_base_url,
-      model: providerModelId
+      model: providerModelId,
+      protocol_options: {
+        response_envelope_key: "data"
+      }
     },
     capabilities: cleanCapabilityList(capabilities),
     limits: {
@@ -252,7 +249,6 @@ function normalizeClineCatalogModel(raw: ClineCatalogModel, observedAt: string, 
         new Set(
           [
             isFree ? "free" : null,
-            hasAnyKeyword(providerModelId, ["coder", "code", "coding"]) ? "coding" : null,
             hasAnyKeyword(name, ["reasoning"]) ? "reasoning" : null
           ].filter((item): item is string => Boolean(item))
         )
@@ -320,7 +316,7 @@ function normalizeClinePassModel(
   const contextTokens = match ? toPositiveInt(match.context_length) : null;
   const maxOutputTokens = match ? toPositiveInt(match.top_provider?.max_completion_tokens) : null;
   const capabilities = match
-    ? catalogCapabilities(match, displayName, description)
+    ? catalogCapabilities(match)
     : new Set<string>(["chat", "streaming", "tool_use"]);
 
   // ClinePass is a flat monthly subscription — never billed per token. The underlying model's
@@ -352,7 +348,10 @@ function normalizeClinePassModel(
     endpoint: {
       protocol: "openai_chat_completions",
       base_url: clinePassProvider.default_base_url,
-      model: providerModelId
+      model: providerModelId,
+      protocol_options: {
+        response_envelope_key: "data"
+      }
     },
     capabilities: cleanCapabilityList(capabilities),
     limits: {
@@ -435,7 +434,6 @@ function normalizeClinePassModel(
       tags: Array.from(
         new Set(
           [
-            hasAnyKeyword(providerModelId, ["coder", "code", "coding"]) ? "coding" : null,
             hasAnyKeyword(displayName, ["reasoning"]) ? "reasoning" : null
           ].filter((item): item is string => Boolean(item))
         )

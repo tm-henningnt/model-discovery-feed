@@ -199,7 +199,9 @@ describe("qwencloudCollector", () => {
 
     expect(coder?.pricing.kind).toBe("unknown");
     expect(coder?.pricing.input_usd_per_1m_tokens).toBeNull();
-    expect(coder?.capabilities).toContain("coding");
+    // ADR 0009: `coding` is no longer inferred here. It moved to the
+    // derive-coding-capability pipeline stage — see derive-coding-capability.test.ts.
+    expect(coder?.capabilities).not.toContain("coding");
     expect(coder?.source_claims).toHaveLength(1);
   });
 
@@ -308,7 +310,9 @@ describe("qwencloudTokenPlanCollector", () => {
     );
     expect(byId.get("glm-5.2")?.capabilities).not.toContain("vision");
     expect(byId.get("wan2.7-image")?.capabilities).toEqual(["image_generation"]);
-    expect(byId.get("kimi-k2.7-code")?.capabilities).toContain("coding");
+    // ADR 0009: `coding` is no longer inferred here. It moved to the
+    // derive-coding-capability pipeline stage — see derive-coding-capability.test.ts.
+    expect(byId.get("kimi-k2.7-code")?.capabilities).not.toContain("coding");
   });
 
   it("keeps the reachable roster and reports a notice when one edition doc fails", async () => {

@@ -9,8 +9,29 @@ import {
   type ArtificialAnalysisSnapshot
 } from "../enrichers/artificial-analysis";
 import { enrichModels } from "../enrichers/pipeline";
+import { RETIRE_OPENCODE_MODELS_COLLECTOR_ID } from "../enrichers/retire-opencode-models";
+import { applyAvailabilityLifecycle } from "./availability-lifecycle";
 import { getFixtureFeed, mergeCollectorFeed, runCollectors } from "./index";
 import type { Collector, CollectorContext, CollectorNotice } from "./types";
+
+/**
+ * Collects the offering ids that an enrichment stage removed on positive
+ * evidence of retirement. The availability lifecycle retires these at once and
+ * excludes them from its mass-loss guard, so a deliberate bulk removal does not
+ * read as a provider outage.
+ */
+function deliberatelyRetiredOfferingIds(enrichmentNotices: CollectorNotice[]): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const notice of enrichmentNotices) {
+    if (notice.collector !== RETIRE_OPENCODE_MODELS_COLLECTOR_ID) continue;
+    const offeringIds = notice.offering_ids;
+    if (!Array.isArray(offeringIds)) continue;
+    for (const id of offeringIds) {
+      if (typeof id === "string") ids.add(id);
+    }
+  }
+  return ids;
+}
 
 type CollectorSnapshotBody = {
   provider: Provider;
@@ -63,8 +84,25 @@ export type PrismaPublishClient = {
         snapshotJson: FeedDocument;
       };
     }): Promise<unknown>;
+    findFirst(args: {
+      where: { status: "published" };
+      orderBy: { generatedAt: "desc" };
+    }): Promise<{ snapshotJson: unknown } | null>;
   };
 };
+
+async function latestPublishedRelease(prisma: PrismaPublishClient): Promise<FeedDocument | null> {
+  const release = await prisma.feedRelease.findFirst({
+    where: { status: "published" },
+    orderBy: { generatedAt: "desc" }
+  });
+
+  if (!release) {
+    return null;
+  }
+
+  return validateFeedDocument(release.snapshotJson);
+}
 
 async function latestArtificialAnalysisSnapshot(
   prisma: PrismaPublishClient
@@ -119,11 +157,24 @@ export async function runCollectorsAndPublish(options: {
   const { providers, models, notices, executions } = await runCollectors(options.context, options.collectors);
   const fallbackSnapshot = await latestArtificialAnalysisSnapshot(options.prisma);
   const enriched = await enrichModels(models, options.context, { fallbackSnapshot });
+
+  // ADR 0008: the retirement diff needs the previous published release, which
+  // only exists once a publish has happened. Its absence (first-ever publish)
+  // is a legitimate no-baseline case, handled inside applyAvailabilityLifecycle.
+  const previousRelease = await latestPublishedRelease(options.prisma);
+  const lifecycle = applyAvailabilityLifecycle({
+    previousRelease,
+    currentModels: enriched.models,
+    notices,
+    now: options.context.now,
+    deliberatelyRetiredIds: deliberatelyRetiredOfferingIds(enriched.notices)
+  });
+
   const mergedFeed = mergeCollectorFeed(
     baseFeed,
     providers,
-    enriched.models,
-    [...notices, ...enriched.notices],
+    lifecycle.models,
+    [...notices, ...enriched.notices, ...lifecycle.notices],
     options.context.now
   );
   const merged = {

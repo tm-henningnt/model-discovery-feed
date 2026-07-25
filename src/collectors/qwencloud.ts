@@ -6,7 +6,6 @@ import {
   collectorNotice,
   fetchJson,
   fetchText,
-  hasAnyKeyword,
   nowIso,
   normalizeText
 } from "./shared";
@@ -116,14 +115,12 @@ function classifyModel(modelId: string): ModelClass {
   return "text";
 }
 
-function capabilitiesForClass(modelClass: ModelClass, modelId: string): Capability[] {
-  const coding = hasAnyKeyword(modelId, ["coder", "code", "coding"]) ? (["coding"] as Capability[]) : [];
-
+function capabilitiesForClass(modelClass: ModelClass): Capability[] {
   switch (modelClass) {
     case "text":
-      return cleanCapabilityList(["chat", "streaming", ...coding]);
+      return cleanCapabilityList(["chat", "streaming"]);
     case "vision":
-      return cleanCapabilityList(["chat", "streaming", "vision", ...coding]);
+      return cleanCapabilityList(["chat", "streaming", "vision"]);
     case "omni":
       return cleanCapabilityList(["chat", "streaming", "vision", "speech_to_text", "text_to_speech"]);
     case "image":
@@ -328,9 +325,9 @@ export function parseTokenPlanRoster(markdown: string): Array<{ modelId: string;
   return [];
 }
 
-function capabilitiesFromDocText(capabilityText: string | null, modelId: string, fallback: ModelClass): Capability[] {
+function capabilitiesFromDocText(capabilityText: string | null, fallback: ModelClass): Capability[] {
   if (!capabilityText) {
-    return capabilitiesForClass(fallback, modelId);
+    return capabilitiesForClass(fallback);
   }
 
   const text = capabilityText.toLowerCase();
@@ -347,11 +344,8 @@ function capabilitiesFromDocText(capabilityText: string | null, modelId: string,
   if (text.includes("image generation")) {
     capabilities.push("image_generation");
   }
-  if (hasAnyKeyword(modelId, ["coder", "code", "coding"])) {
-    capabilities.push("coding");
-  }
 
-  return capabilities.length > 0 ? cleanCapabilityList(capabilities) : capabilitiesForClass(fallback, modelId);
+  return capabilities.length > 0 ? cleanCapabilityList(capabilities) : capabilitiesForClass(fallback);
 }
 
 function displayNameFor(modelId: string, brand: string | null): string {
@@ -375,7 +369,7 @@ function normalizeMarketplaceModel(
   observedAt: string
 ): ModelOffering {
   const modelClass = classifyModel(modelId);
-  const capabilities = capabilitiesForClass(modelClass, modelId);
+  const capabilities = capabilitiesForClass(modelClass);
   const protocol = protocolForClass(modelClass);
   const metering = meteringForClass(modelClass);
   const hasRate = rate !== undefined && (rate.input !== null || rate.output !== null);
@@ -484,7 +478,7 @@ function normalizeMarketplaceModel(
     ],
     policy: {
       visibility: "listed",
-      tags: [...(tag ? [tag] : []), ...(capabilities.includes("coding") ? ["coding"] : [])],
+      tags: [...(tag ? [tag] : [])],
       recommended_for_agentic_workflows: null
     }
   };
@@ -492,7 +486,7 @@ function normalizeMarketplaceModel(
 
 function normalizeTokenPlanModel(entry: TokenPlanEntry, observedAt: string): ModelOffering {
   const modelClass = classifyModel(entry.modelId);
-  const capabilities = capabilitiesFromDocText(entry.capabilityText, entry.modelId, modelClass);
+  const capabilities = capabilitiesFromDocText(entry.capabilityText, modelClass);
   const protocol = protocolForClass(modelClass);
   const tag = classTag(modelClass);
   const sourceUrls: Record<TokenPlanEdition, string> = {
@@ -589,8 +583,7 @@ function normalizeTokenPlanModel(entry: TokenPlanEntry, observedAt: string): Mod
       tags: [
         "token-plan",
         ...entry.editions.map((edition) => `token-plan-${edition}`),
-        ...(tag ? [tag] : []),
-        ...(capabilities.includes("coding") ? ["coding"] : [])
+        ...(tag ? [tag] : [])
       ],
       recommended_for_agentic_workflows: capabilities.includes("chat") ? true : null
     }

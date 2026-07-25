@@ -296,6 +296,54 @@ describe("feed schema", () => {
     expect(validateFeedJsonSchema(extended)).toBe(true);
   });
 
+  it("validates a feed document without response_envelope_key", () => {
+    const feed = cloneExampleFeed();
+    feed.models[0] = {
+      ...feed.models[0],
+      endpoint: {
+        ...feed.models[0].endpoint,
+        protocol_options: undefined
+      }
+    };
+
+    expect(() => validateFeedDocument(feed)).not.toThrow();
+    expect(validateFeedJsonSchema(feed)).toBe(true);
+  });
+
+  it("validates a feed document with response_envelope_key", () => {
+    const feed = cloneExampleFeed();
+    feed.models[0] = {
+      ...feed.models[0],
+      endpoint: {
+        ...feed.models[0].endpoint,
+        protocol_options: {
+          response_envelope_key: "data"
+        }
+      }
+    };
+
+    expect(() => validateFeedDocument(feed)).not.toThrow();
+    expect(validateFeedJsonSchema(feed)).toBe(true);
+  });
+
+  it("validates with unknown keys in protocol_options (permissiveness preserved)", () => {
+    const feed = cloneExampleFeed();
+    feed.models[0] = {
+      ...feed.models[0],
+      endpoint: {
+        ...feed.models[0].endpoint,
+        protocol_options: {
+          response_envelope_key: "data",
+          future_option_key: "unknown_value",
+          another_future_key: 123
+        }
+      }
+    };
+
+    expect(() => validateFeedDocument(feed)).not.toThrow();
+    expect(validateFeedJsonSchema(feed)).toBe(true);
+  });
+
   it("validates the public conformance feed fixtures", async () => {
     const validFeed = await readPublicFixture("valid-feed.json");
     const staleFreeFeed = await readPublicFixture("stale-free-feed.json");

@@ -1,5 +1,5 @@
 import type { ModelOffering, Provider } from "../feed/schema";
-import type { Collector, CollectorContext, CollectorResult } from "./types";
+import type { Collector, CollectorContext, CollectorNotice, CollectorResult } from "./types";
 import {
   claim,
   cleanCapabilityList,
@@ -89,6 +89,18 @@ function numericFields(values: Record<string, unknown> | null | undefined): Reco
   return Object.keys(numeric).length > 0 ? numeric : null;
 }
 
+// ADR 0008 rule (b): a provider-published retirement date in the past means
+// `retired`; in the future means `deprecated`. Parsed defensively — an
+// absent, empty, or unparseable expiration_date leaves availability.status
+// untouched, since that is not evidence of anything.
+function expirationVerdict(value: string | null | undefined, nowMs: number): "retired" | "deprecated" | null {
+  const parsed = normalizeDatetime(value);
+  if (!parsed) {
+    return null;
+  }
+  return Date.parse(parsed) <= nowMs ? "retired" : "deprecated";
+}
+
 function designArenaEntries(entries: DesignArenaEntry[] | null | undefined): Array<{
   arena: string | null;
   category: string | null;
@@ -111,11 +123,13 @@ function designArenaEntries(entries: DesignArenaEntry[] | null | undefined): Arr
   return normalized.length > 0 ? normalized : null;
 }
 
-function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, index: number): ModelOffering | null {
+function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, index: number, nowMs: number): ModelOffering | null {
   const providerModelId = normalizeText(raw.id);
   if (!providerModelId) {
     return null;
   }
+
+  const expiration = expirationVerdict(raw.expiration_date, nowMs);
 
   const name = normalizeText(raw.name) ?? providerModelId;
   const description = normalizeText(raw.description);
@@ -138,9 +152,6 @@ function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, inde
   }
   if (inputModalities.some((item) => item === "image") || outputModalities.some((item) => item === "image")) {
     capabilityCandidates.add("vision");
-  }
-  if (hasAnyKeyword(providerModelId, ["coder", "code", "coding"]) || hasAnyKeyword(name, ["coder", "code", "coding"]) || hasAnyKeyword(description ?? "", ["coder", "code", "coding"])) {
-    capabilityCandidates.add("coding");
   }
 
   const promptPrice = usdPerMillionTokens(raw.pricing?.prompt);
@@ -213,7 +224,7 @@ function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, inde
         : null
     },
     availability: {
-      status: "available",
+      status: expiration ?? "available",
       last_checked_at: observedAt,
       last_success_at: observedAt,
       stale_after_seconds: 86400
@@ -282,15 +293,34 @@ function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, inde
               }
             })
           ]
+        : []),
+      ...(expiration
+        ? [
+            claim({
+              id: `openrouter:${providerModelId}:expiration:${index}`,
+              collector: "openrouter",
+              sourceType: "provider_api",
+              sourceUrl: "https://openrouter.ai/api/v1/models",
+              observedAt,
+              fieldPaths: ["availability.status"],
+              confidence: "high",
+              rawReference: {
+                rule: expiration === "retired" ? "provider_expiration_date_past" : "provider_expiration_date_future",
+                snapshot_id: "openrouter-live-response",
+                json_pointer: `/data/${index}/expiration_date`,
+                provider_model_id: providerModelId,
+                expiration_date: normalizeDatetime(raw.expiration_date)
+              }
+            })
+          ]
         : [])
     ],
     policy: {
-      visibility: "listed",
+      visibility: expiration === "retired" ? "hidden" : "listed",
       tags: Array.from(
         new Set(
           [
             isFree ? "free" : null,
-            hasAnyKeyword(providerModelId, ["coder", "code", "coding"]) ? "coding" : null,
             hasAnyKeyword(name, ["reasoning"]) ? "reasoning" : null
           ].filter((item): item is string => Boolean(item))
         )
@@ -319,14 +349,29 @@ export const openrouterCollector: Collector = {
       };
     }
 
+    const nowMs = context.now.getTime();
     const models = (Array.isArray(response.data.data) ? response.data.data : [])
-      .map((raw, index) => normalizeOpenRouterModel(raw, observedAt, index))
+      .map((raw, index) => normalizeOpenRouterModel(raw, observedAt, index, nowMs))
       .filter((model): model is ModelOffering => model !== null);
+
+    // ADR 0008 rule (b): summarize the expiration_date signal (rule 2) so an
+    // operator can see it fire without reading every offering's claims.
+    const retiredByExpiration = models.filter((model) => model.availability.status === "retired").length;
+    const deprecatedByExpiration = models.filter((model) => model.availability.status === "deprecated").length;
+    const notices: CollectorNotice[] =
+      retiredByExpiration > 0 || deprecatedByExpiration > 0
+        ? [
+            collectorNotice("openrouter", "provider-published expiration date set availability", {
+              retired_count: retiredByExpiration,
+              deprecated_count: deprecatedByExpiration
+            })
+          ]
+        : [];
 
     return {
       provider,
       models,
-      notices: []
+      notices
     };
   }
 };

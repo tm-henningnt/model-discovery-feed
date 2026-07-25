@@ -113,4 +113,108 @@ describe("openrouterCollector", () => {
       expect.objectContaining({ source_type: "third_party_catalog" })
     ]));
   });
+
+  it("retires and hides an offering whose expiration_date is in the past", async () => {
+    const fakeFetch: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "poolside/laguna-m.1",
+              name: "Laguna M.1",
+              pricing: { prompt: "0.000001", completion: "0.000004" },
+              expiration_date: "2026-07-01T00:00:00.000Z"
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    const context: CollectorContext = { now: new Date("2026-07-11T00:00:00.000Z"), fetch: fakeFetch, env: {} };
+
+    const result = await openrouterCollector.collect(context);
+    const model = result.models.find((candidate) => candidate.id === "openrouter:poolside/laguna-m.1");
+
+    expect(model?.availability.status).toBe("retired");
+    expect(model?.policy.visibility).toBe("hidden");
+    expect(model?.source_claims).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          collector: "openrouter",
+          confidence: "high",
+          field_paths: ["availability.status"],
+          raw_reference: expect.objectContaining({ rule: "provider_expiration_date_past" })
+        })
+      ])
+    );
+    expect(result.notices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          collector: "openrouter",
+          message: "provider-published expiration date set availability",
+          retired_count: 1,
+          deprecated_count: 0
+        })
+      ])
+    );
+  });
+
+  it("deprecates but does not hide an offering whose expiration_date is in the future", async () => {
+    const fakeFetch: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "openai/gpt-5.3-chat",
+              name: "GPT-5.3 Chat",
+              pricing: { prompt: "0.000001", completion: "0.000004" },
+              expiration_date: "2026-08-10T00:00:00.000Z"
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    const context: CollectorContext = { now: new Date("2026-07-11T00:00:00.000Z"), fetch: fakeFetch, env: {} };
+
+    const result = await openrouterCollector.collect(context);
+    const model = result.models.find((candidate) => candidate.id === "openrouter:openai/gpt-5.3-chat");
+
+    expect(model?.availability.status).toBe("deprecated");
+    expect(model?.policy.visibility).toBe("listed");
+    expect(model?.source_claims).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          raw_reference: expect.objectContaining({ rule: "provider_expiration_date_future" })
+        })
+      ])
+    );
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["empty", ""],
+    ["unparseable", "not-a-date"]
+  ])("leaves availability.status untouched when expiration_date is %s", async (_label, expirationDate) => {
+    const fakeFetch: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "openai/plain-model",
+              name: "Plain Model",
+              pricing: { prompt: "0.000001", completion: "0.000004" },
+              expiration_date: expirationDate
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    const context: CollectorContext = { now: new Date("2026-07-11T00:00:00.000Z"), fetch: fakeFetch, env: {} };
+
+    const result = await openrouterCollector.collect(context);
+    const model = result.models.find((candidate) => candidate.id === "openrouter:openai/plain-model");
+
+    expect(model?.availability.status).toBe("available");
+    expect(model?.policy.visibility).toBe("listed");
+    expect(result.notices).toEqual([]);
+  });
 });

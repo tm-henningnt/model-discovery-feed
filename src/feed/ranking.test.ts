@@ -372,3 +372,27 @@ describe("profile comparators honor an injected clock", () => {
     expect(compareForBestValueCoder(paid, paid, staleNow)).toBe(0);
   });
 });
+
+describe("availability ranking tiers (ADR 0008)", () => {
+  function withAvailability(id: string, status: ModelOffering["availability"]["status"]): ModelOffering {
+    const model = rankingModel(id, { codingScore: 50, inputPrice: 2, outputPrice: 2 });
+    model.availability.status = status;
+    return model;
+  }
+
+  it("scores available above limited/deprecated, which score above unknown/retired", () => {
+    const available = withAvailability("avail:available", "available");
+    const limited = withAvailability("avail:limited", "limited");
+    const deprecated = withAvailability("avail:deprecated", "deprecated");
+    const unknown = withAvailability("avail:unknown", "unknown");
+    const retired = withAvailability("avail:retired", "retired");
+
+    const sorted = [retired, unknown, deprecated, limited, available].sort((a, b) => compareRecommended(a, b));
+
+    expect(sorted[0].id).toBe(available.id);
+    // limited and deprecated tie at tier 1, so id order breaks the tie.
+    expect(sorted.slice(1, 3).map((m) => m.id).sort()).toEqual([deprecated.id, limited.id].sort());
+    // unknown and retired tie at tier 0.
+    expect(sorted.slice(3, 5).map((m) => m.id).sort()).toEqual([retired.id, unknown.id].sort());
+  });
+});
