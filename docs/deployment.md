@@ -16,6 +16,16 @@ Do not put secrets in `NEXT_PUBLIC_*` variables.
 
 Use the pooled connection string for runtime app traffic.
 
+Prisma 7 does not read the connection URL from `prisma/schema.prisma`. Two places
+read `DATABASE_URL` instead:
+
+- `prisma.config.ts` supplies the URL to Prisma Migrate.
+- `src/server/prisma.ts` passes the URL to Prisma Client through the `PrismaPg`
+  driver adapter.
+
+The environment variable is unchanged. `prisma generate` needs no database, so it
+runs without `DATABASE_URL`.
+
 The Prisma GitHub integration can own schema application when a project uses it. In that setup, the scheduled refresh workflow does not need to run `prisma migrate deploy`; it only generates the Prisma Client and publishes a new feed release.
 
 Keep a direct connection string available for local/manual Prisma operations. If a project does not use Prisma's GitHub integration, run `npx prisma migrate deploy` in CI with a direct database URL.
