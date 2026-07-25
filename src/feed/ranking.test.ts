@@ -8,6 +8,7 @@ import {
   compareForBestCoder,
   compareForBestValueCoder,
   compareRecommended,
+  BEST_VALUE_CODER_MIN_CODING_SCORE,
   rankByProfile,
   selectBestAgentic,
   selectBestCoder,
@@ -44,6 +45,30 @@ describe("best-free-coder ranking", () => {
 
     expect(rankByProfile(feed.models, "best-agentic")).toHaveLength(0);
     expect(selectBestAgentic(feed)).toBeUndefined();
+  });
+
+  it("keeps a cheap but weak coder out of best-value-coder (ADR 0010 floor)", () => {
+    // Score divided by price has no quality floor of its own, so the cheapest
+    // barely-capable model wins outright. The live feed selected a 25.3-scoring
+    // offering before the floor existed.
+    const feed = structuredClone(exampleFeed);
+    const cheapAndWeak = rankingModel("paid:cheap-weak", {
+      pricingKind: "paid",
+      codingScore: BEST_VALUE_CODER_MIN_CODING_SCORE - 1,
+      inputPrice: 0.01,
+      outputPrice: 0.01
+    });
+    const dearerAndCapable = rankingModel("paid:dearer-capable", {
+      pricingKind: "paid",
+      codingScore: BEST_VALUE_CODER_MIN_CODING_SCORE + 10,
+      inputPrice: 1,
+      outputPrice: 1
+    });
+    feed.models = [cheapAndWeak, dearerAndCapable];
+
+    const ranked = rankByProfile(feed.models, "best-value-coder");
+    expect(ranked.map((model) => model.id)).toEqual(["paid:dearer-capable"]);
+    expect(selectBestValueCoder(feed)?.id).toBe("paid:dearer-capable");
   });
 
   it("detects stale free claims", () => {

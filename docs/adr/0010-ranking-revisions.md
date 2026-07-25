@@ -34,6 +34,8 @@ The `coding` capability comparison is dead code. The profile's predicate already
 
 6. Treat a missing capability flag as missing evidence, never as a negative signal, in every profile comparator. A capability flag may rank offerings only below the measured score it competes with.
 
+7. Give `best-value-coder` a floor of `coding_score` 40. The profile divides a score by a blended price, so without a floor the cheapest barely-capable offering always wins. On the 2026-07-25 feed it selected an offering scoring 25.3. The floor makes the profile answer "the best value among models that can code". The value reuses the threshold ADR 0005 set for the removed `fastest-coder` profile rather than inventing a new one. Floors of 30, 40 and 50 select the same offering against the current catalog, so 40 is not fitted to today's data.
+
 ## Rejected alternatives
 
 ### Keep `fastest-coder` and publish an empty result
@@ -55,6 +57,7 @@ Rejected because the profile would return paid subscription offerings. Use `best
 ## Consequences
 
 - `best-free-coder` selects `opencode-zen:mimo-v2.5-free` at 56.8 rather than a 43.4-scoring offering.
+- `best-value-coder` selects an offering scoring 58.8 rather than one scoring 25.3. Its candidate pool falls from 278 to 154.
 - The feed publishes four delegation profiles rather than five.
 - A `?profile=fastest-coder` request no longer resolves to a profile.
 - A provider with a sparse capability catalog competes on measured quality.

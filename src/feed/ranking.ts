@@ -11,6 +11,17 @@ const preferredPricing = new Map([
   ["unknown", 0]
 ]);
 
+/**
+ * `best-value-coder` divides a coding score by a blended price, so without a
+ * floor the cheapest barely-capable model always wins: on the 2026-07-25 feed
+ * it selected an offering scoring 25.3. The floor makes the profile answer
+ * "the best value among models that can actually code". 40 is the same
+ * threshold ADR 0005 set for the removed `fastest-coder` profile, reused
+ * rather than invented; scores of 30, 40 and 50 all select the same offering
+ * against the current catalog, so the value is not fitted to today's data.
+ */
+export const BEST_VALUE_CODER_MIN_CODING_SCORE = 40;
+
 export const DELEGATION_PROFILE_IDS = [
   "best-free-coder",
   "best-coder",
@@ -97,7 +108,8 @@ function predicateForBestValueCoder(model: ModelOffering): boolean {
     model.pricing.kind === "paid" &&
     model.pricing.input_usd_per_1m_tokens !== null &&
     model.pricing.output_usd_per_1m_tokens !== null &&
-    model.quality.coding_score !== null
+    model.quality.coding_score !== null &&
+    model.quality.coding_score >= BEST_VALUE_CODER_MIN_CODING_SCORE
   );
 }
 

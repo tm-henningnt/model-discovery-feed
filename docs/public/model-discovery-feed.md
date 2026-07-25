@@ -63,6 +63,22 @@ When `pricing.kind = "free"`, `pricing.free` records:
 - `last_verified_at`
 - `confidence`
 
+#### `unknown` does not mean "paid"
+
+`unknown` means the provider published no price the collector could read. It is an absence of data,
+never a statement that the offering costs money. Do not treat it as paid, and do not exclude it from
+a search for cheap options.
+
+Two consequences follow, and both are live today.
+
+A provider can offer an account-level free tier the feed cannot see. Groq publishes 15 offerings: 8
+`paid` and 7 `unknown`, with no price on the 7. A consumer with a Groq free-tier account pays nothing
+for models this feed cannot label free. Gemini shows the same shape on 20 of its 56 offerings. The
+feed reports what a provider publishes, and an account-level entitlement is not part of that.
+
+Check the provider's own pricing page before you rule an `unknown` offering out on cost. If you know
+an offering is free on your account, treat your own knowledge as better than this field.
+
 ### Billing unit
 
 `pricing.metering` names the unit the provider bills in. The rate fields
@@ -125,10 +141,19 @@ Use the published array for a stable pick, and the query for a pick against your
 ### Availability
 
 `availability.status` answers one question: does the provider's own catalog currently list this
-offering for sale? It is never a guarantee that your account can call the model. The feed observes
+offering for sale? It describes catalog membership. It does not describe callability, in either
+direction.
+
+`available` is never a guarantee that your account can call the model. The feed observes
 availability with the feed's own collector credentials. A provider can gate a model by account age,
 region, or plan tier. The feed cannot detect that gating. Treat `available` as "worth trying", not
 as "confirmed to work for you".
+
+`retired` is not a guarantee that a call fails. A provider often withdraws an identifier from its
+catalog and keeps serving it through a grace period. All four offerings this feed retired on
+2026-07-25 still returned a completion when a consumer called them directly. Read `retired` as a
+migration warning, not as "do not call". Do not drop a working model from your own configuration on
+this status alone. Let a failed call decide that.
 
 The values mean:
 

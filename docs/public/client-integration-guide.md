@@ -331,6 +331,25 @@ respects your own filters.
 `fastest-coder` was removed. No provider the feed integrates publishes a per-endpoint speed
 measurement, so the profile could never return a result. Requests for it no longer resolve.
 
+### Two fields that do not mean what they look like
+
+**`availability.status` describes catalog membership, not callability.**
+
+`available` does not promise your key can call the model. The feed observes availability with its own
+collector credentials, and a provider can gate a model by account age, region, or plan tier.
+
+`retired` does not promise a call fails. A provider often withdraws an identifier from its catalog
+and keeps serving it through a grace period. Every offering this feed retired on 2026-07-25 still
+returned a completion when called directly. Read `retired` as a migration warning: start planning a
+move, but do not drop a working model from your configuration on this status alone. Let a failed call
+decide that.
+
+**`pricing.kind: "unknown"` does not mean paid.** It means the provider published no price the
+collector could read. Groq publishes 15 offerings, 8 `paid` and 7 `unknown`; a consumer on Groq's
+free tier pays nothing for models this feed cannot label free. Gemini has the same gap on 20 of 56.
+Do not exclude an `unknown` offering when you search for cheap options, and prefer your own account
+knowledge over this field.
+
 ### Capabilities state kind, not degree
 
 A capability says what kind of work an offering supports. It never says how well the offering does
