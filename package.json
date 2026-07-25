@@ -14,7 +14,7 @@
   },
   "homepage": "https://github.com/tm-henningnt/model-discovery-feed#readme",
   "engines": {
-    "node": ">=22"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",
