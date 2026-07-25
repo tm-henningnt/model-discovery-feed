@@ -3,6 +3,18 @@ import { applyManualOverrides, type ManualOverrideInput } from "./overrides";
 import { validateFeedDocument, type FeedDocument } from "./schema";
 import { getPrismaClient } from "@/server/prisma";
 
+/**
+ * Describe an error for the logs without leaking a secret. Database errors can
+ * quote the connection string, so remove credentials and query strings.
+ */
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return "non-error thrown";
+  const message = error.message
+    .replace(/([a-z+]+:\/\/)[^\s@/]*@/gi, "$1<redacted>@")
+    .replace(/([?&](api_key|apikey|password|sslcert)=)[^&\s]*/gi, "$1<redacted>");
+  return `${error.name}: ${message}`;
+}
+
 type PublishedFeedRelease = {
   snapshotJson: unknown;
 };
@@ -115,7 +127,10 @@ export class OptionalPrismaFeedStore implements FeedStore {
         throw error;
       }
 
-      throw new Error("Failed to load published feed release");
+      // Log the underlying fault. Without it the real cause, such as a rejected
+      // connection string, is invisible in the runtime logs.
+      console.error(`Failed to load published feed release. ${describeError(error)}`);
+      throw new Error("Failed to load published feed release", { cause: error });
     }
   }
 }
