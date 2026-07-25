@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { FeedUnavailable } from "../components/FeedUnavailable";
 import { loadFeed } from "../lib/feed-data";
 import { Explorer } from "./Explorer";
 
@@ -12,7 +13,16 @@ export const metadata: Metadata = {
 };
 
 export default async function ExplorePage() {
-  const { feed, status, usingFixture } = await loadFeed();
+  const load = await loadFeed();
+  if (!load.ok) {
+    return (
+      <div className="page">
+        <FeedUnavailable surface="the feed explorer" />
+      </div>
+    );
+  }
+
+  const { feed, status, usingFixture } = load;
   const listed = feed.models.filter((m) => m.policy.visibility === "listed");
 
   return (

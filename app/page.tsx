@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { isConfidentlyFree } from "@/feed/classification";
+import type { FeedDocument } from "@/feed/schema";
 import { CodeBlock } from "./components/CodeBlock";
+import { FeedUnavailable } from "./components/FeedUnavailable";
 import { loadFeed } from "./lib/feed-data";
 import { capabilityLabel, formatRelativeTime, formatTokens } from "./lib/format";
 import styles from "./home.module.css";
@@ -35,7 +37,7 @@ const OBJECTS = [
   }
 ];
 
-function specimen(feed: Awaited<ReturnType<typeof loadFeed>>["feed"]): string {
+function specimen(feed: FeedDocument): string {
   const model = feed.models.find((m) => m.policy.visibility === "listed");
   if (!model) return "{}";
   const trimmed = {
@@ -65,7 +67,16 @@ function specimen(feed: Awaited<ReturnType<typeof loadFeed>>["feed"]): string {
 }
 
 export default async function Home() {
-  const { feed, status, usingFixture } = await loadFeed();
+  const load = await loadFeed();
+  if (!load.ok) {
+    return (
+      <section className={`page ${styles.hero}`}>
+        <FeedUnavailable surface="the overview" />
+      </section>
+    );
+  }
+
+  const { feed, status, usingFixture } = load;
   const now = new Date();
   const freeCount = feed.models.filter((m) => isConfidentlyFree(m, now)).length;
   const capabilities = Array.from(new Set(feed.models.flatMap((m) => m.capabilities)));

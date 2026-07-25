@@ -599,3 +599,17 @@
     font-family: var(--font-sans);
   }
 }
+
+/* Shown only when the feed falls back to the bundled fixture. The old wording
+   was a fragment in the subheading, which readers took for real data. */
+.fixtureBanner {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--warn-border, rgba(217, 119, 6, 0.45));
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--warn-surface, rgba(217, 119, 6, 0.08));
+  color: var(--text, inherit);
+  font-size: var(--step-sm);
+  line-height: 1.55;
+}

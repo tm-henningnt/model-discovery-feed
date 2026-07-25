@@ -14,7 +14,10 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function DocsIndex() {
-  const { feed } = await loadFeed();
+  const load = await loadFeed();
+  // Keep the documentation readable during an outage. Only the attribution list
+  // depends on the feed, so it gets its own unavailable state.
+  const attributions = load.ok ? load.feed.attributions : null;
 
   return (
     <div className={`page ${styles.shell}`}>
@@ -60,11 +63,16 @@ export default async function DocsIndex() {
           <h2 id="data-sources-title" className={styles.refsTitle}>
             Data sources &amp; attribution
           </h2>
-          {feed.attributions.length === 0 ? (
+          {attributions === null ? (
+            <p className={styles.sourcesEmpty}>
+              This deployment cannot read its published feed release, so its data sources cannot be
+              listed.
+            </p>
+          ) : attributions.length === 0 ? (
             <p className={styles.sourcesEmpty}>The current feed snapshot does not include data-source attributions.</p>
           ) : (
             <ul className={styles.sourceList}>
-              {feed.attributions.map((attribution) => {
+              {attributions.map((attribution) => {
                 const url = safeHttpUrl(attribution.url);
                 return (
                   <li key={`${attribution.source}-${attribution.url}`} className={styles.sourceRow}>

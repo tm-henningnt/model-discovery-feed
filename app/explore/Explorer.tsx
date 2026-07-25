@@ -239,10 +239,16 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
             {models.length} listed {models.length === 1 ? "offering" : "offerings"} · generated{" "}
             {formatRelativeTime(generatedAt, nowMs)}
             {stale ? " · feed is stale" : ""}
-            {usingFixture ? " · showing bundled fixture" : ""}
           </p>
         </div>
       </header>
+
+      {usingFixture ? (
+        <p className={styles.fixtureBanner} role="status">
+          <strong>Example data.</strong> No feed release is published, so these offerings come from
+          the bundled fixture. Their scores are invented and describe no real model.
+        </p>
+      ) : null}
 
       <div className={styles.toolbar}>
         <div className={styles.search}>
