@@ -184,6 +184,36 @@ describe("feed schema", () => {
     });
   });
 
+  it("keeps plan_editions typed while every provider's own subscription keys stay legal", () => {
+    const feed = cloneExampleFeed();
+    // The three subscription shapes the collectors emit today: QwenCloud Token Plan, ClinePass,
+    // and OpenCode Zen. Each carries keys the contract does not name.
+    feed.models[0].pricing.kind = "subscription_included";
+    feed.models[0].pricing.free = null;
+    feed.models[0].pricing.subscription = {
+      billing: "flat_monthly",
+      per_token_billed: false,
+      reference_pricing: false,
+      credits_metered: true,
+      interactive_use_only: true,
+      quota_multiplier_vs_payg: "2-5x",
+      plan_editions: ["personal", "team"]
+    };
+
+    const validated = validateFeedDocument(feed);
+    expect(validated.models[0].pricing.subscription?.plan_editions).toEqual(["personal", "team"]);
+    expect(validated.models[0].pricing.subscription?.quota_multiplier_vs_payg).toBe("2-5x");
+    expect(validateFeedJsonSchema(feed)).toBe(true);
+  });
+
+  it("rejects a non-string plan edition", () => {
+    const feed = cloneExampleFeed();
+    feed.models[0].pricing.subscription = { plan_editions: [7 as never] };
+
+    expect(() => validateFeedDocument(feed)).toThrow();
+    expect(validateFeedJsonSchema(feed)).toBe(false);
+  });
+
   it("validates the example feed against the published JSON Schema", () => {
     expect(validateFeedJsonSchema(cloneExampleFeed())).toBe(true);
   });

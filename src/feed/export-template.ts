@@ -1,3 +1,4 @@
+import { modelPlanEditions } from "./filter";
 import { formatScore, formatSpeed, formatTokens } from "./format";
 import { blendedPricePer1M } from "./ranking";
 import type { ModelOffering } from "./schema";
@@ -16,9 +17,15 @@ function sanitizeForRaw(text: string): string {
 function pricingSummary(model: ModelOffering): string {
   const kind = model.pricing.kind;
   if (kind === "subscription_included") {
-    const multiplier = (model.pricing.subscription as { quota_multiplier_vs_payg?: unknown } | undefined)
-      ?.quota_multiplier_vs_payg;
-    return typeof multiplier === "string" ? `subscription bundle (~${multiplier} pay-as-you-go quota)` : "subscription bundle";
+    const multiplier = model.pricing.subscription?.quota_multiplier_vs_payg;
+    const editions = modelPlanEditions(model);
+    const summary =
+      typeof multiplier === "string"
+        ? `subscription bundle (~${multiplier} pay-as-you-go quota)`
+        : "subscription bundle";
+    // An exported briefing names the editions, because a plan sold in several editions covers a
+    // different roster in each and the reader may hold only one of them.
+    return editions.length ? `${summary} [${editions.join("/")}]` : summary;
   }
   if (kind === "free_tier") return "free tier (rate-limited)";
   if (kind === "free") return "free";

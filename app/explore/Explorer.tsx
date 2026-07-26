@@ -6,6 +6,7 @@ import type { FeedDocument, ModelOffering, Provider } from "@/feed/schema";
 import { isConfidentlyFree } from "@/feed/classification";
 import { compareNullableNumbersDescending, compareRecommended } from "@/feed/ranking";
 import { computeFacetCounts, filterExplorerModels, type ExplorerFilters } from "@/feed/facets";
+import { modelPlanEditions } from "@/feed/filter";
 import { StatusChip } from "../components/StatusChip";
 import {
   availabilityTone,
@@ -15,6 +16,7 @@ import {
   formatScore,
   formatSpeed,
   formatTokens,
+  planEditionLabel,
   pricingLabel,
   pricingTone,
   protocolLabel,
@@ -45,6 +47,7 @@ const SORT_KEYS: SortKey[] = ["default", "name", "context", "price", "coding", "
 const PARAMS = {
   query: "q",
   provider: "provider",
+  planEdition: "plan_edition",
   capabilities: "capabilities",
   pricing: "pricing_kind",
   availability: "availability",
@@ -85,6 +88,9 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
 
   const [query, setQuery] = useState(() => searchParams.get(PARAMS.query) ?? "");
   const [selProviders, setSelProviders] = useState<Set<string>>(() => parseSet(searchParams, PARAMS.provider));
+  const [selPlanEditions, setSelPlanEditions] = useState<Set<string>>(() =>
+    parseSet(searchParams, PARAMS.planEdition)
+  );
   const [selCaps, setSelCaps] = useState<Set<string>>(() => parseSet(searchParams, PARAMS.capabilities));
   const [selPricing, setSelPricing] = useState<Set<string>>(() => parseSet(searchParams, PARAMS.pricing));
   const [selAvail, setSelAvail] = useState<Set<string>>(() => parseSet(searchParams, PARAMS.availability));
@@ -108,6 +114,7 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
       const params = new URLSearchParams();
       if (query.trim()) params.set(PARAMS.query, query.trim());
       if (selProviders.size) params.set(PARAMS.provider, [...selProviders].join(","));
+      if (selPlanEditions.size) params.set(PARAMS.planEdition, [...selPlanEditions].join(","));
       if (selCaps.size) params.set(PARAMS.capabilities, [...selCaps].join(","));
       if (selPricing.size) params.set(PARAMS.pricing, [...selPricing].join(","));
       if (selAvail.size) params.set(PARAMS.availability, [...selAvail].join(","));
@@ -126,6 +133,7 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
     pathname,
     query,
     selProviders,
+    selPlanEditions,
     selCaps,
     selPricing,
     selAvail,
@@ -146,6 +154,8 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
   // Facet universes (from all listed models) fix which values are shown and
   // in which order — ordering by live counts would shuffle rows mid-filter.
   const providerUniverse = useMemo(() => countBy(models, (m) => [m.provider.id]), [models]);
+  // Empty unless the feed carries a multi-edition plan, so the facet hides itself.
+  const planEditionUniverse = useMemo(() => countBy(models, modelPlanEditions), [models]);
   const capUniverse = useMemo(() => countBy(models, (m) => m.capabilities as string[]), [models]);
   const pricingUniverse = useMemo(() => countBy(models, (m) => [m.pricing.kind]), [models]);
   const availUniverse = useMemo(() => countBy(models, (m) => [m.availability.status]), [models]);
@@ -156,13 +166,14 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
       query,
       freeOnly,
       providers: selProviders,
+      planEditions: selPlanEditions,
       capabilities: selCaps,
       pricing: selPricing,
       availability: selAvail,
       protocols: selProtocols,
       minContext
     }),
-    [query, freeOnly, selProviders, selCaps, selPricing, selAvail, selProtocols, minContext]
+    [query, freeOnly, selProviders, selPlanEditions, selCaps, selPricing, selAvail, selProtocols, minContext]
   );
 
   // Displayed counts follow the active filters (each facet ignores only its
@@ -199,6 +210,7 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
 
   const activeCount =
     selProviders.size +
+    selPlanEditions.size +
     selCaps.size +
     selPricing.size +
     selAvail.size +
@@ -210,6 +222,7 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
   const clearAll = useCallback(() => {
     setQuery("");
     setSelProviders(new Set());
+    setSelPlanEditions(new Set());
     setSelCaps(new Set());
     setSelPricing(new Set());
     setSelAvail(new Set());
@@ -324,6 +337,22 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
               ))}
           </Facet>
 
+          {planEditionUniverse.size ? (
+            <Facet title="Plan edition" hint="A plan sells a different roster per edition">
+              {[...planEditionUniverse.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .map(([edition]) => (
+                  <FacetCheck
+                    key={edition}
+                    label={planEditionLabel(edition)}
+                    count={facetCounts.planEditions.get(edition) ?? 0}
+                    checked={selPlanEditions.has(edition)}
+                    onChange={() => toggle(setSelPlanEditions, edition)}
+                  />
+                ))}
+            </Facet>
+          ) : null}
+
           <Facet title="Capability" hint="Matches offerings with all selected">
             {[...capUniverse.entries()]
               .sort((a, b) => b[1] - a[1])
@@ -421,6 +450,13 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
                     onRemove={() => toggle(setSelProviders, id)}
                   />
                 ))}
+                {[...selPlanEditions].map((e) => (
+                  <ActiveChip
+                    key={`e-${e}`}
+                    label={planEditionLabel(e)}
+                    onRemove={() => toggle(setSelPlanEditions, e)}
+                  />
+                ))}
                 {[...selCaps].map((c) => (
                   <ActiveChip key={`c-${c}`} label={capabilityLabel(c)} onRemove={() => toggle(setSelCaps, c)} />
                 ))}
@@ -498,7 +534,20 @@ export function Explorer({ models, providers, attributions, generatedAt, stale, 
                         <span className={styles.offerName}>{m.display_name}</span>
                         <span className={`mono ${styles.offerId}`}>{m.id}</span>
                       </td>
-                      <td>{m.provider.name}</td>
+                      <td>
+                        <span className={styles.providerCell}>
+                          <span>{m.provider.name}</span>
+                          {modelPlanEditions(m).length ? (
+                            <span className={styles.caps}>
+                              {modelPlanEditions(m).map((edition) => (
+                                <span key={edition} className="tag">
+                                  {planEditionLabel(edition)}
+                                </span>
+                              ))}
+                            </span>
+                          ) : null}
+                        </span>
+                      </td>
                       <td>
                         <span className={styles.caps}>
                           {m.capabilities.slice(0, 3).map((c) => (

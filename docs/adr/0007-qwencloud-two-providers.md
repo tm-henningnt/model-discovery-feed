@@ -4,7 +4,9 @@ Status: Accepted
 
 See also: ADR 0003 (OpenRouter-slug canonical namespace), ADR 0004 (cross-provider intrinsic-score
 propagation), and ADR 0006 (the same two-provider split for Cline, which this ADR follows and departs
-from on one point). Source discovery is recorded in `docs/research/qwencloud-models-source.md`.
+from on one point). ADR 0012 extends this one: it keeps the provider split below and makes the plan
+edition a named contract field and a filter dimension. Source discovery is recorded in
+`docs/research/qwencloud-models-source.md`.
 
 ## Context
 

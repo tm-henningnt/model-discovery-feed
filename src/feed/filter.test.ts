@@ -1,6 +1,35 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { exampleFeed } from "./fixture";
-import { filterModels, modelSearchHaystack } from "./filter";
+import type { FeedDocument, ModelOffering } from "./schema";
+import { filterModels, filtersFromSearchParams, modelPlanEditions, modelSearchHaystack } from "./filter";
+
+/**
+ * A feed with one plan sold in two editions: a shared model, a Team-only model, and a
+ * pay-as-you-go model that no edition covers.
+ */
+function planFeed(): FeedDocument {
+  const feed = structuredClone(exampleFeed);
+  const make = (id: string, editions: string[] | null, tags: string[]): ModelOffering => {
+    const model = structuredClone(feed.models[0]);
+    model.id = id;
+    model.provider = { id: "token-plan", name: "Token Plan" };
+    model.pricing = {
+      ...model.pricing,
+      kind: editions ? "subscription_included" : "paid",
+      free: null,
+      ...(editions ? { subscription: { billing: "flat_monthly", plan_editions: editions } } : {})
+    };
+    model.policy = { ...model.policy, tags };
+    return model;
+  };
+
+  feed.models = [
+    make("plan:both", ["personal", "team"], ["token-plan", "token-plan-personal", "token-plan-team"]),
+    make("plan:team-only", ["team"], ["token-plan", "token-plan-team"]),
+    make("plan:payg", null, ["image-generation"])
+  ];
+  return feed;
+}
 
 describe("filterModels", () => {
   beforeEach(() => {
@@ -103,6 +132,44 @@ describe("filterModels", () => {
     const byId = feed.models.find((model) => model.id === feed.models[0].id);
     expect(byId).toBeDefined();
     expect(byId?.availability.status).toBe("retired");
+  });
+
+  it("keeps only the offerings one plan edition covers", () => {
+    expect(filterModels(planFeed(), { planEditions: ["personal"] }).map((model) => model.id)).toEqual([
+      "plan:both"
+    ]);
+  });
+
+  it("unions the rosters of several plan editions", () => {
+    expect(filterModels(planFeed(), { planEditions: ["personal", "team"] }).map((model) => model.id)).toEqual([
+      "plan:both",
+      "plan:team-only"
+    ]);
+  });
+
+  it("excludes an offering with no subscription from every plan-edition filter", () => {
+    expect(filterModels(planFeed(), { planEditions: ["team"] }).map((model) => model.id)).not.toContain("plan:payg");
+  });
+
+  it("matches an offering that carries any one of the requested tags", () => {
+    expect(filterModels(planFeed(), { tags: ["token-plan-personal"] }).map((model) => model.id)).toEqual([
+      "plan:both"
+    ]);
+    expect(filterModels(planFeed(), { tags: ["image-generation", "token-plan-team"] }).map((model) => model.id)).toEqual([
+      "plan:both",
+      "plan:team-only",
+      "plan:payg"
+    ]);
+  });
+
+  it("reads tag and plan_edition as comma-separated lists", () => {
+    const filters = filtersFromSearchParams(new URLSearchParams("tag=token-plan,image-generation&plan_edition=personal"));
+    expect(filters.tags).toEqual(["token-plan", "image-generation"]);
+    expect(filters.planEditions).toEqual(["personal"]);
+  });
+
+  it("reports no plan editions for an offering without a subscription", () => {
+    expect(modelPlanEditions(exampleFeed.models[0])).toEqual([]);
   });
 
   it("builds a search haystack including id, display name, provider name, and provider_model_id", () => {

@@ -173,7 +173,15 @@ export const modelOfferingSchema = z
           })
           .passthrough()
           .nullable(),
-        subscription: z.record(z.unknown()).optional()
+        // A subscription's facts vary per provider, so the object stays open. `plan_editions` is
+        // named because it is the only key a consumer must read to route correctly: a plan with
+        // several editions sells a different roster per edition (ADR 0012).
+        subscription: z
+          .object({
+            plan_editions: z.array(z.string()).optional()
+          })
+          .passthrough()
+          .optional()
       })
       .passthrough(),
     availability: z

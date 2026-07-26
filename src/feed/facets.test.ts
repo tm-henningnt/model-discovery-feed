@@ -9,6 +9,7 @@ const noFilters: ExplorerFilters = {
   query: "",
   freeOnly: false,
   providers: new Set(),
+  planEditions: new Set(),
   capabilities: new Set(),
   pricing: new Set(),
   availability: new Set(),
@@ -20,8 +21,9 @@ function cloneModel(overrides: {
   id: string;
   providerId?: string;
   capabilities?: string[];
-  pricingKind?: "free" | "paid" | "unknown";
+  pricingKind?: "free" | "paid" | "unknown" | "subscription_included";
   availability?: "available" | "limited";
+  planEditions?: string[];
 }): ModelOffering {
   const base = structuredClone(exampleFeed.models[1]); // groq gpt-oss-120b, pricing unknown
   base.id = overrides.id;
@@ -38,6 +40,9 @@ function cloneModel(overrides: {
   if (overrides.availability) {
     base.availability.status = overrides.availability;
   }
+  if (overrides.planEditions) {
+    base.pricing.subscription = { billing: "flat_monthly", plan_editions: overrides.planEditions };
+  }
   return base;
 }
 
@@ -46,6 +51,23 @@ const models: ModelOffering[] = [
   ...structuredClone(exampleFeed.models),
   cloneModel({ id: "gemini:a", providerId: "gemini", capabilities: ["chat", "vision"], pricingKind: "paid" }),
   cloneModel({ id: "gemini:b", providerId: "gemini", capabilities: ["chat"], availability: "limited" })
+];
+
+// A plan sold in two editions, where the smaller edition's roster is a subset of the larger one.
+const planModels: ModelOffering[] = [
+  cloneModel({
+    id: "plan:both",
+    providerId: "token-plan",
+    pricingKind: "subscription_included",
+    planEditions: ["personal", "team"]
+  }),
+  cloneModel({
+    id: "plan:team-only",
+    providerId: "token-plan",
+    pricingKind: "subscription_included",
+    planEditions: ["team"]
+  }),
+  cloneModel({ id: "plan:payg", providerId: "token-plan", pricingKind: "paid" })
 ];
 
 describe("filterExplorerModels", () => {
@@ -60,6 +82,25 @@ describe("filterExplorerModels", () => {
 
   it("returns everything when no filters are active", () => {
     expect(filterExplorerModels(models, noFilters, NOW)).toHaveLength(models.length);
+  });
+
+  it("keeps only the offerings a selected plan edition covers", () => {
+    const results = filterExplorerModels(planModels, { ...noFilters, planEditions: new Set(["personal"]) }, NOW);
+    expect(results.map((m) => m.id)).toEqual(["plan:both"]);
+  });
+
+  it("unions the rosters of several selected editions (OR semantics)", () => {
+    const results = filterExplorerModels(
+      planModels,
+      { ...noFilters, planEditions: new Set(["personal", "team"]) },
+      NOW
+    );
+    expect(results.map((m) => m.id)).toEqual(["plan:both", "plan:team-only"]);
+  });
+
+  it("excludes an offering that is not sold through a plan", () => {
+    const results = filterExplorerModels(planModels, { ...noFilters, planEditions: new Set(["team"]) }, NOW);
+    expect(results.map((m) => m.id)).not.toContain("plan:payg");
   });
 });
 
@@ -98,6 +139,21 @@ describe("computeFacetCounts", () => {
     expect(counts.providers.get("openrouter")).toBe(1);
     expect(counts.providers.get("gemini")).toBeUndefined();
     expect(counts.pricing.get("free")).toBe(1);
+  });
+
+  it("counts each plan edition without restricting it by its own selection", () => {
+    const counts = computeFacetCounts(planModels, { ...noFilters, planEditions: new Set(["personal"]) }, NOW);
+    // Team keeps its would-be count so the user can see what switching would show.
+    expect(counts.planEditions.get("personal")).toBe(1);
+    expect(counts.planEditions.get("team")).toBe(2);
+    // Other facets are restricted by the edition selection.
+    expect(counts.pricing.get("subscription_included")).toBe(1);
+    expect(counts.pricing.get("paid")).toBeUndefined();
+  });
+
+  it("restricts the plan-edition counts by the provider selection", () => {
+    const counts = computeFacetCounts([...planModels, ...models], { ...noFilters, providers: new Set(["gemini"]) }, NOW);
+    expect(counts.planEditions.size).toBe(0);
   });
 
   it("cross-restricts independent facets while skipping their own", () => {

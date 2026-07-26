@@ -286,7 +286,13 @@ export const feedJsonSchema = {
             { $ref: "#/$defs/pricing_free" }
           ]
         },
-        subscription: { type: "object", additionalProperties: true }
+        subscription: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            plan_editions: { type: "array", items: { type: "string" } }
+          }
+        }
       },
       allOf: [
         {

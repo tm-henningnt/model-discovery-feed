@@ -8,6 +8,8 @@ export type ModelFilters = {
   provider?: string;
   capability?: string;
   capabilities?: string[];
+  tags?: string[];
+  planEditions?: string[];
   protocol?: string;
   openaiCompatible?: boolean;
   minContextTokens?: number;
@@ -25,6 +27,8 @@ export function filtersFromSearchParams(params: URLSearchParams): ModelFilters {
     provider: params.get("provider") ?? undefined,
     capability: params.get("capability") ?? undefined,
     capabilities: params.get("capabilities")?.split(",").filter(Boolean),
+    tags: params.get("tag")?.split(",").filter(Boolean),
+    planEditions: params.get("plan_edition")?.split(",").filter(Boolean),
     protocol: params.get("protocol") ?? undefined,
     openaiCompatible: parseBoolean(params.get("openai_compatible")),
     minContextTokens: parseNumber(params.get("min_context_tokens")),
@@ -49,6 +53,16 @@ export function filterModels(feed: FeedDocument, filters: ModelFilters, now = ne
     if (filters.capability && !model.capabilities.includes(filters.capability as never)) return false;
     if (filters.capabilities?.some((capability) => !model.capabilities.includes(capability as never))) {
       return false;
+    }
+    // `tag` and `plan_edition` are OR-lists: one match keeps the offering. `capabilities` is an
+    // AND-list because a caller asks for a model that does all of several things, but a caller
+    // asks for a model sold under any of several tags or plan editions.
+    if (filters.tags?.length && !filters.tags.some((tag) => model.policy.tags.includes(tag))) {
+      return false;
+    }
+    if (filters.planEditions?.length) {
+      const editions = modelPlanEditions(model);
+      if (!filters.planEditions.some((edition) => editions.includes(edition))) return false;
     }
     if (filters.protocol && model.endpoint.protocol !== filters.protocol) return false;
     if (filters.openaiCompatible !== undefined) {
@@ -75,6 +89,16 @@ export function filterModels(feed: FeedDocument, filters: ModelFilters, now = ne
 
     return model.policy.visibility === "listed";
   });
+}
+
+/**
+ * The plan editions that include this offering, or an empty array. A plan sold in several editions
+ * offers a different roster per edition, so a consumer that filters only by provider id
+ * over-selects — QwenCloud Token Plan Personal covers 11 of the provider's 23 models (ADR 0012).
+ */
+export function modelPlanEditions(model: ModelOffering): string[] {
+  const editions = model.pricing.subscription?.plan_editions;
+  return Array.isArray(editions) ? editions.filter((edition): edition is string => typeof edition === "string") : [];
 }
 
 export function modelSearchHaystack(model: ModelOffering): string {

@@ -1,6 +1,6 @@
 import type { ModelOffering } from "./schema";
 import { isConfidentlyFree } from "./classification";
-import { modelSearchHaystack } from "./filter";
+import { modelPlanEditions, modelSearchHaystack } from "./filter";
 
 /**
  * Client-side explorer filter state. Sets hold the selected values per facet;
@@ -10,6 +10,7 @@ export type ExplorerFilters = {
   query: string;
   freeOnly: boolean;
   providers: ReadonlySet<string>;
+  planEditions: ReadonlySet<string>;
   capabilities: ReadonlySet<string>;
   pricing: ReadonlySet<string>;
   availability: ReadonlySet<string>;
@@ -17,7 +18,7 @@ export type ExplorerFilters = {
   minContext: number;
 };
 
-type SkippableFacet = "providers" | "pricing" | "availability" | "protocols";
+type SkippableFacet = "providers" | "planEditions" | "pricing" | "availability" | "protocols";
 
 export function matchesExplorerFilters(
   model: ModelOffering,
@@ -27,6 +28,12 @@ export function matchesExplorerFilters(
 ): boolean {
   if (filters.freeOnly && !isConfidentlyFree(model, now)) return false;
   if (skip !== "providers" && filters.providers.size > 0 && !filters.providers.has(model.provider.id)) return false;
+  // OR semantics: an offering in any selected edition stays. Personal is a subset of Team, so AND
+  // would show only the overlap and hide the Team-only models the user asked to see.
+  if (skip !== "planEditions" && filters.planEditions.size > 0) {
+    const editions = modelPlanEditions(model);
+    if (!editions.some((edition) => filters.planEditions.has(edition))) return false;
+  }
   if (
     filters.capabilities.size > 0 &&
     ![...filters.capabilities].every((capability) => (model.capabilities as string[]).includes(capability))
@@ -54,6 +61,7 @@ export function filterExplorerModels(models: ModelOffering[], filters: ExplorerF
 
 export type FacetCounts = {
   providers: Map<string, number>;
+  planEditions: Map<string, number>;
   capabilities: Map<string, number>;
   pricing: Map<string, number>;
   availability: Map<string, number>;
@@ -61,7 +69,7 @@ export type FacetCounts = {
 };
 
 /**
- * Faceted counts: each single-select-style facet (provider, pricing,
+ * Faceted counts: each OR-semantics facet (provider, plan edition, pricing,
  * availability, protocol) is counted against the models matching every OTHER
  * active filter, so a value's count answers "how many results if I select
  * this". Capabilities filter with AND semantics, so their counts keep the
@@ -82,6 +90,7 @@ export function computeFacetCounts(models: ModelOffering[], filters: ExplorerFil
 
   return {
     providers: count("providers", (model) => [model.provider.id]),
+    planEditions: count("planEditions", modelPlanEditions),
     capabilities: count(undefined, (model) => model.capabilities as string[]),
     pricing: count("pricing", (model) => [model.pricing.kind]),
     availability: count("availability", (model) => [model.availability.status]),

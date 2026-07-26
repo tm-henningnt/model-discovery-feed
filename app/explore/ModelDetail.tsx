@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import type { FeedDocument, ModelOffering, Provider, SourceClaim } from "@/feed/schema";
+import { modelPlanEditions } from "@/feed/filter";
 import { CodeBlock } from "../components/CodeBlock";
 import { StatusChip } from "../components/StatusChip";
 import {
@@ -11,6 +12,7 @@ import {
   formatScore,
   formatSpeed,
   formatTokens,
+  planEditionLabel,
   pricingLabel,
   pricingTone,
   protocolLabel,
@@ -38,6 +40,7 @@ export function ModelDetail({ model, provider, artificialAnalysisAttribution, on
   useFocusTrap(panelRef, closeRef, onClose);
 
   const free = model.pricing.free;
+  const planEditions = modelPlanEditions(model);
   const homepage = safeHttpUrl(provider?.homepage);
   const canonical = model.canonical_model;
   const artificialAnalysisClaim = model.source_claims.find(
@@ -124,6 +127,12 @@ export function ModelDetail({ model, provider, artificialAnalysisAttribution, on
                   : `$${model.pricing.input_usd_per_1m_tokens ?? "?"} / $${model.pricing.output_usd_per_1m_tokens ?? "?"} per 1M`
               }
             />
+            {planEditions.length ? (
+              <Field
+                label="Plan editions"
+                value={planEditions.map(planEditionLabel).join(", ")}
+              />
+            ) : null}
             {free ? (
               <div className={styles.freeBox}>
                 <p className={styles.freeTitle}>Free classification</p>

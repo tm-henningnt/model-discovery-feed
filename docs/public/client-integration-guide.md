@@ -350,6 +350,42 @@ free tier pays nothing for models this feed cannot label free. Gemini has the sa
 Do not exclude an `unknown` offering when you search for cheap options, and prefer your own account
 knowledge over this field.
 
+### A plan provider is not one roster
+
+A plan can sell several editions under one provider id, and each edition covers a different set of
+models. Filtering on the provider alone therefore over-selects for a subscriber on the smaller
+edition.
+
+QwenCloud Token Plan is the live case. The provider `qwencloud-token-plan` holds 22 offerings.
+Personal covers 11 of them; Team covers all 22; the Personal roster is a subset of the Team roster. A
+Personal subscriber that routes work to any of the other 11 gets a rejection.
+
+Read `pricing.subscription.plan_editions` on each offering, and let the user say which edition they
+hold. Do not infer it from the provider id.
+
+```ts
+// Wrong: routes to models a Personal subscriber cannot call.
+const models = feed.models.filter((m) => m.provider.id === "qwencloud-token-plan");
+
+// Right: the edition is part of the question.
+const edition = userConfig.tokenPlanEdition; // "personal" | "team"
+const models = feed.models.filter(
+  (m) =>
+    m.provider.id === "qwencloud-token-plan" &&
+    (m.pricing.subscription?.plan_editions ?? []).includes(edition)
+);
+```
+
+Server-side, ask for the edition directly:
+
+```bash
+curl -H "Authorization: Bearer $KEY" \
+  "$BASE/v1/models?provider=qwencloud-token-plan&plan_edition=personal"
+```
+
+An offering that no plan covers carries no `plan_editions`, so a `plan_edition` filter excludes it.
+That is correct: a pay-as-you-go offering is not part of a subscription roster.
+
 ### Capabilities state kind, not degree
 
 A capability says what kind of work an offering supports. It never says how well the offering does

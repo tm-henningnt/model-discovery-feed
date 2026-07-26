@@ -45,6 +45,25 @@
         "credit_card_required": null
       },
       "source_claims": []
+    },
+    {
+      "id": "example-token-plan",
+      "object": "provider",
+      "name": "Example Token Plan",
+      "homepage": "https://example.invalid/pricing/token-plan",
+      "api_protocols": ["openai_chat_completions"],
+      "default_base_url": "https://token-plan.example.invalid/v1",
+      "authentication": {
+        "type": "api_key",
+        "header": "Authorization",
+        "scheme": "Bearer",
+        "credential_hint": "EXAMPLE_TOKEN_PLAN_API_KEY"
+      },
+      "signup": {
+        "required": true,
+        "credit_card_required": true
+      },
+      "source_claims": []
     }
   ],
   "models": [
@@ -197,6 +216,82 @@
         "visibility": "listed",
         "tags": ["coding"],
         "recommended_for_agentic_workflows": null
+      }
+    },
+    {
+      "id": "example-token-plan:example-max",
+      "object": "model_offering",
+      "display_name": "Example Max",
+      "provider": { "id": "example-token-plan", "name": "Example Token Plan" },
+      "provider_model_id": "example-max",
+      "canonical_model": {
+        "id": "example/example-max",
+        "confidence": "medium",
+        "knowledge_cutoff": null,
+        "release_date": null,
+        "open_weights": null
+      },
+      "description": "Fixture subscription offering. The plan sells two editions with different rosters, and this model is in the larger edition only.",
+      "endpoint": {
+        "protocol": "openai_chat_completions",
+        "base_url": "https://token-plan.example.invalid/v1",
+        "model": "example-max"
+      },
+      "capabilities": ["chat", "streaming"],
+      "limits": {
+        "context_tokens": 262144,
+        "max_output_tokens": 65536
+      },
+      "pricing": {
+        "kind": "subscription_included",
+        "input_usd_per_1m_tokens": null,
+        "output_usd_per_1m_tokens": null,
+        "currency": null,
+        "metering": "credits",
+        "free": null,
+        "subscription": {
+          "billing": "flat_monthly",
+          "per_token_billed": false,
+          "reference_pricing": false,
+          "credits_metered": true,
+          "plan_editions": ["team"],
+          "pricing_url": "https://example.invalid/pricing/token-plan",
+          "interactive_use_only": true
+        }
+      },
+      "availability": {
+        "status": "available",
+        "last_checked_at": "2026-07-08T12:00:00.000Z",
+        "last_success_at": "2026-07-08T12:00:00.000Z",
+        "stale_after_seconds": 86400
+      },
+      "quality": {
+        "coding_score": null,
+        "reasoning_score": null,
+        "agentic_score": null,
+        "speed_score": null,
+        "benchmarks": null,
+        "recommendation_notes": []
+      },
+      "source_claims": [
+        {
+          "id": "claim_fixture_token_plan_roster",
+          "source_type": "provider_docs",
+          "source_url": "https://example.invalid/docs/token-plan/team",
+          "collector": "fixture",
+          "observed_at": "2026-07-08T12:00:00.000Z",
+          "field_paths": ["provider_model_id", "pricing.kind", "pricing.subscription.plan_editions"],
+          "confidence": "high",
+          "raw_reference": {
+            "snapshot_id": "fixture_token_plan_team",
+            "plan_edition": "team"
+          }
+        }
+      ],
+      "policy": {
+        "visibility": "listed",
+        "tags": ["token-plan", "token-plan-team"],
+        "recommended_for_agentic_workflows": true
       }
     }
   ],

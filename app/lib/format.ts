@@ -48,6 +48,16 @@ export function pricingLabel(kind: PricingKind): string {
   return PRICING_LABEL[kind] ?? kind;
 }
 
+const PLAN_EDITION_LABEL: Record<string, string> = {
+  personal: "Personal",
+  team: "Team"
+};
+
+/** A plan edition is a provider-supplied string, so an unmapped edition still renders. */
+export function planEditionLabel(edition: string): string {
+  return PLAN_EDITION_LABEL[edition] ?? statusLabel(edition);
+}
+
 const CAPABILITY_LABEL: Partial<Record<Capability, string>> = {
   chat: "Chat",
   coding: "Coding",

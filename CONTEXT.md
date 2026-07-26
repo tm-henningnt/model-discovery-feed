@@ -52,7 +52,8 @@ is the separate pay-as-you-go provider above)
 **Plan edition**:
 One price tier of a subscription provider, with its own roster (Token Plan Personal vs Team). An edition
 is a property of the sale, not a provider — the same model in both editions is one offering carrying two
-edition tags.
+edition tags. Consumers filter on it with `?plan_edition=`, and the explorer offers it as a facet, because
+filtering by provider alone over-selects for a subscriber on the smaller edition (see ADR 0012).
 
 **Availability**:
 Whether a consumer can still buy an offering from its provider. The status `available` means the provider currently lists the offering. The status does not claim the offering will answer requests. It does not guarantee any consumer can access it — providers can gate by region, account age, or plan. An offering that leaves the catalog becomes `retired` and stays in the feed for 7 days (see ADR 0008).

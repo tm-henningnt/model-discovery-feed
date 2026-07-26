@@ -85,12 +85,31 @@ an offering is free on your account, treat your own knowledge as better than thi
 `input_usd_per_1m_tokens` and `output_usd_per_1m_tokens` are meaningful only when it is `tokens`:
 
 - `tokens` — per-token billing; the rate fields carry USD per 1M tokens.
-- `credits` — a subscription's own quota unit. Read `pricing.subscription` for the plan facts.
+- `credits` — a subscription's own quota unit. Read `pricing.subscription` for the plan facts, and
+  `pricing.subscription.plan_editions` for the editions that include the offering.
 - `images`, `video_seconds`, `characters`, `audio_seconds` — the provider bills per generated image, per
   second of output video, per character of input text, or per second of input audio.
 
 An offering can state `pricing.kind = "paid"` with both rate fields `null`. That combination means the
 price is known to exist but is not expressed in tokens; use `metering` to see which unit applies.
+
+### Plan editions
+
+A plan can sell several editions under one price list, and each edition covers a different set of
+models. QwenCloud Token Plan is the live example: Personal covers 11 models, Team covers 22, and the
+Personal roster is a subset of the Team roster.
+
+The feed publishes one provider per plan, not one per edition. An offering is a model at a provider,
+and the edition is a property of the sale. Each offering therefore records the editions that include
+it in `pricing.subscription.plan_editions`, and repeats them as `token-plan-<edition>` entries in
+`policy.tags`.
+
+**Caution: `provider` alone over-selects.** A consumer that keeps every offering of
+`qwencloud-token-plan` gets 22 models. A subscriber on the Personal edition can call 11 of them. Read
+`plan_editions`, or filter with `plan_edition`, whenever you route work through a plan.
+
+`plan_editions` is the only key the contract names inside `pricing.subscription`. The rest of the
+object varies per provider, so read the other keys defensively.
 
 ### Quality scores
 
@@ -190,7 +209,18 @@ The implementation defines these public endpoints:
 | `GET /v1/models/{id}` | Return one model offering by id. |
 | `GET /v1/providers` | Return providers, with additive filtering. |
 
-Filtering is intentionally client-friendly and additive. The implementation supports provider, capability, pricing kind, protocol, context window, API-key requirement, and availability as supported filter dimensions. Clients should tolerate unknown filters and unknown response fields.
+Filtering is intentionally client-friendly and additive. The implementation supports provider, capability, plan edition, policy tag, pricing kind, protocol, context window, API-key requirement, and availability as supported filter dimensions. Clients should tolerate unknown filters and unknown response fields.
+
+Two parameters take a comma-separated list and keep an offering that matches **any** entry:
+
+| Parameter | Reads | Example |
+| --- | --- | --- |
+| `plan_edition` | `pricing.subscription.plan_editions` | `?provider=qwencloud-token-plan&plan_edition=personal` |
+| `tag` | `policy.tags` | `?tag=token-plan-personal` or `?tag=image-generation,video-generation` |
+
+`capabilities` differs: it keeps an offering that has **all** the listed capabilities, because a caller
+asks for one model that does several things. A caller asks instead for a model sold under any of
+several tags or editions.
 
 ## Reference CLI
 
