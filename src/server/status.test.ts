@@ -6,7 +6,7 @@ describe("buildStatus", () => {
   it("marks a feed stale after expires_at", () => {
     const feed = structuredClone(exampleFeed);
 
-    expect(buildStatus(feed, new Date("2026-07-08T13:00:01.000Z"))).toMatchObject({
+    expect(buildStatus(feed, new Date("2026-07-08T17:00:01.000Z"))).toMatchObject({
       stale: true,
       collector_health: {
         status: "degraded",
@@ -19,9 +19,9 @@ describe("buildStatus", () => {
     const feed = structuredClone(exampleFeed);
     feed.feed.expires_at = null;
 
-    expect(buildStatus(feed, new Date("2026-07-09T12:00:01.000Z"))).toMatchObject({
+    expect(buildStatus(feed, new Date("2026-07-08T17:00:01.000Z"))).toMatchObject({
       stale: true,
-      stale_at: "2026-07-09T12:00:00.000Z"
+      stale_at: "2026-07-08T17:00:00.000Z"
     });
   });
 

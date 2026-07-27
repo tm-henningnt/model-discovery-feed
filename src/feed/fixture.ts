@@ -7,9 +7,9 @@ export const exampleFeed: FeedDocument = {
   feed: {
     id: "example-model-feed",
     generated_at: observedAt,
-    expires_at: "2026-07-08T13:00:00.000Z",
+    expires_at: "2026-07-08T17:00:00.000Z",
     source_revision: "fixture-2026-07-08T12:00:00.000Z",
-    default_stale_after_seconds: 86400
+    default_stale_after_seconds: 18000
   },
   attributions: [
     {

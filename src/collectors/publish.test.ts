@@ -248,7 +248,7 @@ describe("runCollectorsAndPublish", () => {
     const merged = mergeCollectorFeed(structuredClone(exampleFeed), [], [], [], generatedAt);
 
     expect(merged.feed.generated_at).toBe("2026-07-08T18:30:00.000Z");
-    expect(merged.feed.expires_at).toBe("2026-07-08T19:30:00.000Z");
+    expect(merged.feed.expires_at).toBe("2026-07-08T23:30:00.000Z");
     expect(merged.feed.expires_at).not.toBe(exampleFeed.feed.expires_at);
   });
 
