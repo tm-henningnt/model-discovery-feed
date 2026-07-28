@@ -2,6 +2,7 @@ import Link from "next/link";
 import { isConfidentlyFree } from "@/feed/classification";
 import type { FeedDocument } from "@/feed/schema";
 import { CodeBlock } from "./components/CodeBlock";
+import { FeedReleaseNotice } from "./components/FeedReleaseNotice";
 import { FeedUnavailable } from "./components/FeedUnavailable";
 import { loadFeed } from "./lib/feed-data";
 import { capabilityLabel, formatRelativeTime, formatTokens } from "./lib/format";
@@ -244,6 +245,8 @@ npm run model-feed -- list \\
           </Link>
         </div>
       </section>
+
+      <FeedReleaseNotice generatedAt={status.generated_at} sourceRevision={status.source_revision} />
     </>
   );
 }

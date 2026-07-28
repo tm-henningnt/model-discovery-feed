@@ -1,4 +1,4 @@
-import { feedStore } from "@/feed/store";
+import { feedStore, type FeedRevision } from "@/feed/store";
 import { exampleFeed } from "@/feed/fixture";
 import { isFixtureSourceRevision } from "@/feed/classification";
 import { buildStatus } from "@/server/status";
@@ -34,6 +34,33 @@ export async function loadFeed(): Promise<FeedLoad> {
   } catch (error) {
     if (error instanceof Error && error.message === "No published feed release found") {
       return { ok: true, feed: exampleFeed, status: buildStatus(exampleFeed), usingFixture: true };
+    }
+
+    return { ok: false };
+  }
+}
+
+export type FeedRevisionLoad = { ok: true; revision: FeedRevision } | { ok: false };
+
+/**
+ * Read which release the site serves right now.
+ *
+ * The outcomes match `loadFeed`. A store with no release reports the fixture,
+ * because that is what the pages show in its place. A failed read reports a
+ * fault, so the browser keeps the revision it already has.
+ */
+export async function loadFeedRevision(): Promise<FeedRevisionLoad> {
+  try {
+    return { ok: true, revision: await feedStore.getRevision() };
+  } catch (error) {
+    if (error instanceof Error && error.message === "No published feed release found") {
+      return {
+        ok: true,
+        revision: {
+          generatedAt: exampleFeed.feed.generated_at,
+          sourceRevision: exampleFeed.feed.source_revision
+        }
+      };
     }
 
     return { ok: false };

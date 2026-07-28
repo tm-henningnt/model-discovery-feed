@@ -30,9 +30,19 @@ The Prisma GitHub integration can own schema application when a project uses it.
 
 Keep a direct connection string available for local/manual Prisma operations. If a project does not use Prisma's GitHub integration, run `npx prisma migrate deploy` in CI with a direct database URL.
 
-## Daily refresh
+## Freshness probe
 
-`.github/workflows/refresh-model-feed.yml` runs once per day at `03:17` UTC and can also be started manually with `workflow_dispatch`.
+Every open page polls `GET /api/feed-revision` to find a new feed release. Plan for one request per
+open tab every five minutes. A hidden tab does not poll. The route reads two columns of the latest
+published release, so it does not transfer or validate the snapshot.
+
+**The interval is hardcoded.** It is `FEED_PROBE_INTERVAL_MS` in
+`app/components/use-feed-revision.ts`. No environment variable overrides it. Raise the constant to
+cut database traffic. Lower it to shorten the delay between a publish and the notice.
+
+## Scheduled refresh
+
+`.github/workflows/refresh-model-feed.yml` runs every four hours at `:17` past the hour and can also be started manually with `workflow_dispatch`.
 
 Example GitHub Actions secrets:
 

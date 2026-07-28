@@ -15,8 +15,15 @@ function describeError(error: unknown): string {
   return `${error.name}: ${message}`;
 }
 
+/**
+ * A published release row. Every column is optional because the two reads below
+ * select different ones: the feed read takes the snapshot, and the revision read
+ * takes the two identity columns.
+ */
 type PublishedFeedRelease = {
-  snapshotJson: unknown;
+  snapshotJson?: unknown;
+  generatedAt?: Date;
+  sourceRevision?: string;
 };
 
 type PrismaFeedReader = {
@@ -27,6 +34,10 @@ type PrismaFeedReader = {
       };
       orderBy: {
         generatedAt: "desc";
+      };
+      select?: {
+        generatedAt: true;
+        sourceRevision: true;
       };
     }): Promise<PublishedFeedRelease | null>;
   };
@@ -55,13 +66,36 @@ type PrismaFeedReader = {
   };
 };
 
+/** Which release a reader is looking at, without the release itself. */
+export type FeedRevision = {
+  /** ISO-8601 timestamp, from `feed.generated_at`. */
+  generatedAt: string;
+  sourceRevision: string;
+};
+
 export type FeedStore = {
   getFeed(): Promise<FeedDocument>;
+  /**
+   * Read the identity of the current release without its snapshot.
+   *
+   * The website polls this to find out that a collector run published a new
+   * release. `getFeed` answers the same question, but it transfers the whole
+   * snapshot and validates it against the schema. That cost per poll is not
+   * acceptable, so this reads two columns instead.
+   */
+  getRevision(): Promise<FeedRevision>;
 };
 
 export class FixtureFeedStore implements FeedStore {
   async getFeed(): Promise<FeedDocument> {
     return validateFeedDocument(exampleFeed);
+  }
+
+  async getRevision(): Promise<FeedRevision> {
+    return {
+      generatedAt: exampleFeed.feed.generated_at,
+      sourceRevision: exampleFeed.feed.source_revision
+    };
   }
 }
 
@@ -131,6 +165,39 @@ export class OptionalPrismaFeedStore implements FeedStore {
       // connection string, is invisible in the runtime logs.
       console.error(`Failed to load published feed release. ${describeError(error)}`);
       throw new Error("Failed to load published feed release", { cause: error });
+    }
+  }
+
+  async getRevision(): Promise<FeedRevision> {
+    if (process.env.MODEL_FEED_USE_DATABASE !== "true" || !process.env.DATABASE_URL) {
+      return this.fallback.getRevision();
+    }
+
+    try {
+      const prisma = this.prisma ?? (getPrismaClient() as unknown as PrismaFeedReader);
+      const release = await prisma.feedRelease.findFirst({
+        where: { status: "published" },
+        orderBy: { generatedAt: "desc" },
+        select: { generatedAt: true, sourceRevision: true }
+      });
+
+      if (!release?.generatedAt || !release.sourceRevision) {
+        throw new Error("No published feed release found");
+      }
+
+      return {
+        generatedAt: release.generatedAt.toISOString(),
+        sourceRevision: release.sourceRevision
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message === "No published feed release found") {
+        throw error;
+      }
+
+      // A failed read must not report a revision. A guess here would either hide
+      // a new release or announce one that does not exist.
+      console.error(`Failed to read the published feed revision. ${describeError(error)}`);
+      throw new Error("Failed to read the published feed revision", { cause: error });
     }
   }
 }

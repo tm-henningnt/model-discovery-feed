@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { FeedReleaseNotice } from "../components/FeedReleaseNotice";
 import { FeedUnavailable } from "../components/FeedUnavailable";
 import { loadFeed } from "../lib/feed-data";
 import { Explorer } from "./Explorer";
@@ -26,16 +27,22 @@ export default async function ExplorePage() {
   const listed = feed.models.filter((m) => m.policy.visibility === "listed");
 
   return (
-    <Suspense fallback={null}>
-      <Explorer
-        models={listed}
-        providers={feed.providers}
-        attributions={feed.attributions}
+    <>
+      <Suspense fallback={null}>
+        <Explorer
+          models={listed}
+          providers={feed.providers}
+          attributions={feed.attributions}
+          generatedAt={status.generated_at}
+          stale={status.stale}
+          usingFixture={usingFixture}
+          nowMs={Date.now()}
+        />
+      </Suspense>
+      <FeedReleaseNotice
         generatedAt={status.generated_at}
-        stale={status.stale}
-        usingFixture={usingFixture}
-        nowMs={Date.now()}
+        sourceRevision={status.source_revision}
       />
-    </Suspense>
+    </>
   );
 }

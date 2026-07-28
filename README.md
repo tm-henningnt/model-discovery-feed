@@ -30,6 +30,23 @@ npm run dev
 - `GET /v1/models/{id}`
 - `GET /v1/providers`
 
+## Website freshness
+
+The website polls `GET /api/feed-revision` every five minutes. A hidden browser tab does not poll.
+When a collector run publishes a new release, the page shows a notice with a **Refresh view**
+button. Refresh re-renders the view from the new release. It keeps the active filters, sort, search,
+and the open offering.
+
+> **The five-minute interval is hardcoded.** It is `FEED_PROBE_INTERVAL_MS` in
+> `app/components/use-feed-revision.ts`, and no environment variable overrides it. Edit that
+> constant to change the interval for every deployment. Collectors publish every four hours
+> (`.github/workflows/refresh-model-feed.yml`), so a five-minute probe finds a new release well
+> before a reader needs it.
+
+The route reports two fields: `generated_at` and `source_revision`. It reads two columns, not the
+whole snapshot, so a poll stays cheap. The route serves the website only. API clients read
+`GET /v1/status`, which reports the same freshness with counts and collector health.
+
 ## Public docs
 
 - [Feed contract, endpoints, CLI usage, and adapter boundaries](docs/public/model-discovery-feed.md)
