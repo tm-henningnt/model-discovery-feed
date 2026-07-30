@@ -33,7 +33,7 @@
     "model-feed": "./bin/model-feed.ts"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.9.0",
+    "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.0",
     "next": "^16.2.10",
     "react": "^19.1.0",
