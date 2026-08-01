@@ -1,4 +1,11 @@
-import type { Capability, EndpointProtocol, ModelOffering, Provider, SourceClaim } from "../feed/schema";
+import type {
+  Capability,
+  Confidence,
+  EndpointProtocol,
+  ModelOffering,
+  Provider,
+  SourceClaim
+} from "../feed/schema";
 import type { CollectorContext, CollectorNotice } from "./types";
 
 const DEFAULT_TIMEOUT_MS = 15000;
@@ -67,6 +74,115 @@ export function toNonNegativeNumber(value: unknown): number | null {
 export function usdPerMillionTokens(value: unknown): number | null {
   const asNumber = toNonNegativeNumber(value);
   return asNumber === null ? null : asNumber * 1_000_000;
+}
+
+export type CollectorPricing = ModelOffering["pricing"];
+
+export interface TokenPricingInput {
+  /** Raw per-token input rate as the provider published it, e.g. `"0.00000014"`. */
+  prompt: unknown;
+  /** Raw per-token output rate as the provider published it. */
+  completion: unknown;
+  /**
+   * Output modalities the provider declares. An absent or empty list means the
+   * collector cannot tell, and the meter is assumed to be tokens.
+   */
+  outputModalities?: string[] | null;
+  expiresAt?: string | null;
+  observedAt: string;
+  /**
+   * How much the collector trusts a zero rate as a free claim about *this*
+   * seller. A reseller that republishes another catalog's rates must pass
+   * `"low"`, because the zero came from the upstream price list.
+   */
+  freeConfidence?: Confidence;
+}
+
+/** A rate in USD per million tokens describes the bill only when tokens are the meter. */
+function meteredInTokens(outputModalities: string[] | null | undefined): boolean {
+  if (!Array.isArray(outputModalities) || outputModalities.length === 0) {
+    return true;
+  }
+  return outputModalities.every((item) => item === "text");
+}
+
+function zeroPricedFree(input: TokenPricingInput): NonNullable<CollectorPricing["free"]> {
+  return {
+    is_currently_free: true,
+    basis: "zero_priced_model",
+    requires_account: true,
+    requires_api_key: true,
+    requires_credit_card: null,
+    quota: null,
+    expires_at: normalizeDatetime(input.expiresAt),
+    last_verified_at: input.observedAt,
+    confidence: input.freeConfidence ?? "high"
+  };
+}
+
+/**
+ * Derives a pricing block from a provider's published per-token rates.
+ *
+ * A zero rate is evidence of free only when tokens are the meter. A model that
+ * bills per song or per image publishes `0` in the token fields because those
+ * fields do not apply to it, so this returns `unknown` with null rates rather
+ * than a free claim. `src/enrichers/models-dev.ts` guards the same way.
+ */
+export function tokenPricing(input: TokenPricingInput): CollectorPricing {
+  const inputRate = usdPerMillionTokens(input.prompt);
+  const outputRate = usdPerMillionTokens(input.completion);
+  const bothZero = inputRate === 0 && outputRate === 0;
+
+  if (bothZero && !meteredInTokens(input.outputModalities)) {
+    return {
+      kind: "unknown",
+      input_usd_per_1m_tokens: null,
+      output_usd_per_1m_tokens: null,
+      currency: null,
+      metering: null,
+      free: null
+    };
+  }
+
+  const kind = bothZero ? "free" : inputRate === null || outputRate === null ? "unknown" : "paid";
+
+  return {
+    kind,
+    input_usd_per_1m_tokens: inputRate,
+    output_usd_per_1m_tokens: outputRate,
+    currency: bothZero || inputRate !== null || outputRate !== null ? "USD" : null,
+    metering: "tokens",
+    free: bothZero ? zeroPricedFree(input) : null
+  };
+}
+
+/**
+ * Pricing for an offering the seller itself publishes as free to its account
+ * holders. The rates are `0` because that is what the account is billed; any
+ * pay-as-you-go rate for the same model belongs in a source claim, not here.
+ *
+ * `kind` stays `"free"` rather than `"free_tier"` so the offering satisfies
+ * `isConfidentlyFree`, and `basis` records that the seller granted the tier.
+ */
+export function accountFreeTierPricing(observedAt: string, quota: string | null = null): CollectorPricing {
+  return {
+    kind: "free",
+    input_usd_per_1m_tokens: 0,
+    output_usd_per_1m_tokens: 0,
+    currency: "USD",
+    metering: "tokens",
+    free: {
+      is_currently_free: true,
+      basis: "account_free_tier",
+      requires_account: true,
+      requires_api_key: true,
+      requires_credit_card: null,
+      quota,
+      expires_at: null,
+      last_verified_at: observedAt,
+      confidence: "high"
+    }
+  };
 }
 
 export function cleanCapabilityList(values: Iterable<Capability | string | null | undefined>): Capability[] {

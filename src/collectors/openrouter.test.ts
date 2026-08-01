@@ -29,6 +29,14 @@ const capturedPayloadExcerpt = {
       name: "Unscored Model",
       context_length: 4096,
       pricing: { prompt: "0", completion: "0" }
+    },
+    {
+      // A music model. It bills per song, so its per-token fields read "0".
+      id: "google/lyria-3-pro-preview",
+      name: "Google: Lyria 3 Pro Preview",
+      context_length: 1048576,
+      pricing: { prompt: "0", completion: "0" },
+      architecture: { input_modalities: ["text"], output_modalities: ["text", "audio"] }
     }
   ]
 };
@@ -216,5 +224,21 @@ describe("openrouterCollector", () => {
     expect(model?.availability.status).toBe("available");
     expect(model?.policy.visibility).toBe("listed");
     expect(result.notices).toEqual([]);
+  });
+
+  it("reads a zero per-token rate as free only when tokens are the meter", async () => {
+    const result = await openrouterCollector.collect(createContext());
+
+    const zeroPriced = result.models.find((m) => m.id === "openrouter:openai/unscored-model");
+    expect(zeroPriced?.pricing.kind).toBe("free");
+    expect(zeroPriced?.policy.tags).toContain("free");
+
+    // A music model bills per song, so its zero per-token rate says nothing about price.
+    const music = result.models.find((m) => m.id === "openrouter:google/lyria-3-pro-preview");
+    expect(music?.pricing.kind).toBe("unknown");
+    expect(music?.pricing.input_usd_per_1m_tokens).toBeNull();
+    expect(music?.pricing.metering).toBeNull();
+    expect(music?.pricing.free).toBeNull();
+    expect(music?.policy.tags).not.toContain("free");
   });
 });

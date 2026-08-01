@@ -1,14 +1,15 @@
 import type { ModelOffering, Provider } from "../feed/schema";
 import type { Collector, CollectorContext, CollectorResult } from "./types";
 import {
+  accountFreeTierPricing,
   claim,
   cleanCapabilityList,
   collectorNotice,
   fetchJson,
   hasAnyKeyword,
   nowIso,
-  normalizeDatetime,
   normalizeText,
+  tokenPricing,
   toPositiveInt,
   usdPerMillionTokens
 } from "./shared";
@@ -61,6 +62,9 @@ type ClineRecommendedResponse = {
 const BASE_URL = "https://api.cline.bot/api/v1";
 const CATALOG_URL = `${BASE_URL}/ai/cline/models`;
 const RECOMMENDED_URL = `${BASE_URL}/ai/cline/recommended-models`;
+
+const CLINE_PASS_PREFIX = "cline-pass/";
+const CLINE_FREE_PREFIX = "cline-free/";
 
 const clineProvider: Provider = {
   id: "cline",
@@ -131,14 +135,22 @@ function deriveCapabilities(
   return capabilities;
 }
 
+function catalogOutputModalities(raw: ClineCatalogModel): string[] {
+  return raw.architecture && Array.isArray(raw.architecture.output_modalities) ? raw.architecture.output_modalities : [];
+}
+
 function catalogCapabilities(raw: ClineCatalogModel): Set<string> {
   const supportedParameters = Array.isArray(raw.supported_parameters) ? raw.supported_parameters : [];
   const inputModalities = raw.architecture && Array.isArray(raw.architecture.input_modalities) ? raw.architecture.input_modalities : [];
-  const outputModalities = raw.architecture && Array.isArray(raw.architecture.output_modalities) ? raw.architecture.output_modalities : [];
-  return deriveCapabilities(supportedParameters, inputModalities, outputModalities, raw.reasoning?.mandatory);
+  return deriveCapabilities(supportedParameters, inputModalities, catalogOutputModalities(raw), raw.reasoning?.mandatory);
 }
 
-function normalizeClineCatalogModel(raw: ClineCatalogModel, observedAt: string, index: number): ModelOffering | null {
+function normalizeClineCatalogModel(
+  raw: ClineCatalogModel,
+  freeRosterIds: Set<string>,
+  observedAt: string,
+  index: number
+): ModelOffering | null {
   const providerModelId = normalizeText(raw.id);
   if (!providerModelId) {
     return null;
@@ -150,10 +162,22 @@ function normalizeClineCatalogModel(raw: ClineCatalogModel, observedAt: string, 
   const maxOutputTokens = toPositiveInt(raw.top_provider?.max_completion_tokens);
   const capabilities = catalogCapabilities(raw);
 
+  // Cline resells OpenRouter's catalog, so a zero rate in the catalog is OpenRouter's price and not
+  // proof that Cline serves the model free. Only Cline's own `free[]` roster settles that, so a
+  // catalog-derived free claim carries low confidence (ADR 0013).
+  const sellerConfirmedFree = freeRosterIds.has(providerModelId);
   const promptPrice = usdPerMillionTokens(raw.pricing?.prompt);
   const completionPrice = usdPerMillionTokens(raw.pricing?.completion);
-  const isFree = promptPrice === 0 && completionPrice === 0;
-  const pricingKind = isFree ? "free" : promptPrice === null || completionPrice === null ? "unknown" : "paid";
+  const pricing = sellerConfirmedFree
+    ? accountFreeTierPricing(observedAt)
+    : tokenPricing({
+        prompt: raw.pricing?.prompt,
+        completion: raw.pricing?.completion,
+        outputModalities: catalogOutputModalities(raw),
+        expiresAt: raw.expiration_date,
+        observedAt,
+        freeConfidence: "low"
+      });
 
   return {
     id: `cline:${providerModelId}`,
@@ -187,26 +211,7 @@ function normalizeClineCatalogModel(raw: ClineCatalogModel, observedAt: string, 
       context_tokens: contextTokens,
       max_output_tokens: maxOutputTokens
     },
-    pricing: {
-      kind: pricingKind,
-      input_usd_per_1m_tokens: promptPrice,
-      output_usd_per_1m_tokens: completionPrice,
-      currency: isFree || promptPrice !== null || completionPrice !== null ? "USD" : null,
-      metering: "tokens",
-      free: isFree
-        ? {
-            is_currently_free: true,
-            basis: "zero_priced_model",
-            requires_account: true,
-            requires_api_key: true,
-            requires_credit_card: null,
-            quota: null,
-            expires_at: normalizeDatetime(raw.expiration_date),
-            last_verified_at: observedAt,
-            confidence: "high"
-          }
-        : null
-    },
+    pricing,
     availability: {
       status: "available",
       last_checked_at: observedAt,
@@ -239,7 +244,16 @@ function normalizeClineCatalogModel(raw: ClineCatalogModel, observedAt: string, 
         rawReference: {
           snapshot_id: "cline-live-response",
           json_pointer: `/data/${index}`,
-          provider_model_id: providerModelId
+          provider_model_id: providerModelId,
+          // Cline's free tier bills nothing, so the offering publishes 0. Keep the catalog's
+          // pay-as-you-go rate here: it states what the same model costs without the tier.
+          ...(sellerConfirmedFree
+            ? {
+                free_roster_source_url: RECOMMENDED_URL,
+                catalog_input_usd_per_1m_tokens: promptPrice,
+                catalog_output_usd_per_1m_tokens: completionPrice
+              }
+            : {})
         }
       })
     ],
@@ -248,7 +262,7 @@ function normalizeClineCatalogModel(raw: ClineCatalogModel, observedAt: string, 
       tags: Array.from(
         new Set(
           [
-            isFree ? "free" : null,
+            pricing.kind === "free" ? "free" : null,
             hasAnyKeyword(name, ["reasoning"]) ? "reasoning" : null
           ].filter((item): item is string => Boolean(item))
         )
@@ -258,15 +272,17 @@ function normalizeClineCatalogModel(raw: ClineCatalogModel, observedAt: string, 
   };
 }
 
-function clinePassBareSlug(id: string): string {
-  return id.startsWith("cline-pass/") ? id.slice("cline-pass/".length) : id;
+// A roster slug carries a Cline-owned namespace prefix (`cline-pass/`, `cline-free/`) that the catalog
+// does not use. Strip it to recover the slug the catalog can be searched by.
+function bareSlug(id: string, prefix: string): string {
+  return id.startsWith(prefix) ? id.slice(prefix.length) : id;
 }
 
 // Match a ClinePass roster slug (e.g. `glm-5.2`) to its full catalog entry (`z-ai/glm-5.2`). The
 // catalog carries the pricing/context/capabilities the roster lacks (ADR 0006).
-function findCatalogMatch(bareSlug: string, catalog: ClineCatalogModel[]): ClineCatalogModel | null {
+function findCatalogMatch(slug: string, catalog: ClineCatalogModel[]): ClineCatalogModel | null {
   // Strip any variant suffix on the roster side too, so the join is symmetric with the catalog side.
-  const target = canonicalSlug(bareSlug).toLowerCase();
+  const target = canonicalSlug(slug).toLowerCase();
   const baseOf = (model: ClineCatalogModel) => canonicalSlug(normalizeText(model.id) ?? "").toLowerCase();
 
   const matches = catalog.filter((model) => {
@@ -294,6 +310,160 @@ function findCatalogMatch(bareSlug: string, catalog: ClineCatalogModel[]): Cline
   return pool.find((model) => !(normalizeText(model.id) ?? "").includes(":")) ?? pool[0];
 }
 
+interface RosterJoin {
+  match: ClineCatalogModel | null;
+  displayName: string;
+  description: string | null;
+  rosterDescription: string | null;
+  contextTokens: number | null;
+  maxOutputTokens: number | null;
+  capabilities: Set<string>;
+  canonicalId: string;
+  canonicalConfidence: "high" | "medium";
+}
+
+// Enrich a roster entry from its catalog match. The roster publishes an id and a blurb; the catalog
+// carries the name, context, capabilities and rate (ADR 0006).
+function joinRosterEntry(
+  entry: ClineRosterEntry,
+  providerModelId: string,
+  prefix: string,
+  catalog: ClineCatalogModel[]
+): RosterJoin {
+  const slug = bareSlug(providerModelId, prefix);
+  const match = findCatalogMatch(slug, catalog);
+  const rosterDescription = normalizeText(entry.description);
+
+  return {
+    match,
+    // The roster `name` is just the prefixed slug, so it is no better than the bare slug as a display
+    // name — only the catalog match carries a human-readable name.
+    displayName: (match && normalizeText(match.name)) ?? slug,
+    description: (match && normalizeText(match.description)) ?? rosterDescription,
+    rosterDescription,
+    contextTokens: match ? toPositiveInt(match.context_length) : null,
+    maxOutputTokens: match ? toPositiveInt(match.top_provider?.max_completion_tokens) : null,
+    capabilities: match ? catalogCapabilities(match) : new Set<string>(["chat", "streaming", "tool_use"]),
+    canonicalId: match ? canonicalSlug(normalizeText(match.id) ?? slug) : providerModelId,
+    canonicalConfidence: match ? "high" : "medium"
+  };
+}
+
+// A `free[]` roster entry in Cline's own `cline-free/` namespace has no catalog entry of its own, so
+// the offering exists only here. Cline states it is free, which is the strongest claim available
+// (ADR 0013).
+function normalizeClineFreeRosterModel(
+  entry: ClineRosterEntry,
+  catalog: ClineCatalogModel[],
+  observedAt: string,
+  index: number
+): ModelOffering | null {
+  const providerModelId = normalizeText(entry.id);
+  if (!providerModelId) {
+    return null;
+  }
+
+  const join = joinRosterEntry(entry, providerModelId, CLINE_FREE_PREFIX, catalog);
+
+  return {
+    id: `cline:${providerModelId}`,
+    object: "model_offering",
+    display_name: join.displayName,
+    provider: {
+      id: clineProvider.id,
+      name: clineProvider.name
+    },
+    provider_model_id: providerModelId,
+    canonical_model: {
+      id: join.canonicalId,
+      confidence: join.canonicalConfidence,
+      knowledge_cutoff: null,
+      release_date: null,
+      open_weights: null
+    },
+    description: join.description,
+    endpoint: {
+      protocol: "openai_chat_completions",
+      base_url: clineProvider.default_base_url,
+      model: providerModelId,
+      protocol_options: {
+        response_envelope_key: "data"
+      }
+    },
+    capabilities: cleanCapabilityList(join.capabilities),
+    limits: {
+      context_tokens: join.contextTokens,
+      max_output_tokens: join.maxOutputTokens
+    },
+    pricing: accountFreeTierPricing(observedAt),
+    availability: {
+      status: "available",
+      last_checked_at: observedAt,
+      last_success_at: observedAt,
+      stale_after_seconds: 86400
+    },
+    quality: {
+      coding_score: null,
+      reasoning_score: null,
+      agentic_score: null,
+      speed_score: null,
+      benchmarks: null,
+      recommendation_notes: join.rosterDescription ? [join.rosterDescription] : []
+    },
+    source_claims: [
+      claim({
+        id: `cline:${providerModelId}:free-roster:${index}`,
+        collector: "cline",
+        sourceUrl: RECOMMENDED_URL,
+        observedAt,
+        fieldPaths: ["endpoint.model", "pricing.kind", "pricing.free.basis"],
+        confidence: "high",
+        rawReference: {
+          snapshot_id: "cline-recommended-live-response",
+          json_pointer: `/free/${index}`,
+          provider_model_id: providerModelId
+        }
+      }),
+      ...(join.match
+        ? [
+            claim({
+              id: `cline:${providerModelId}:catalog-join:${index}`,
+              collector: "cline",
+              sourceUrl: CATALOG_URL,
+              observedAt,
+              fieldPaths: [
+                "canonical_model.id",
+                "display_name",
+                "limits.context_tokens",
+                "limits.max_output_tokens",
+                "capabilities"
+              ],
+              confidence: "high",
+              rawReference: {
+                snapshot_id: "cline-live-response",
+                provider_model_id: providerModelId,
+                matched_catalog_id: normalizeText(join.match.id)
+              }
+            })
+          ]
+        : [])
+    ],
+    policy: {
+      visibility: "listed",
+      tags: Array.from(
+        new Set(
+          [
+            "free",
+            hasAnyKeyword(join.displayName, ["reasoning"]) ? "reasoning" : null
+          ].filter((item): item is string => Boolean(item))
+        )
+      ),
+      recommended_for_agentic_workflows:
+        join.capabilities.has("tool_use") || join.capabilities.has("structured_output") ? true : null
+    }
+  };
+}
+
 function normalizeClinePassModel(
   entry: ClineRosterEntry,
   catalog: ClineCatalogModel[],
@@ -305,28 +475,15 @@ function normalizeClinePassModel(
     return null;
   }
 
-  const bareSlug = clinePassBareSlug(providerModelId);
-  const match = findCatalogMatch(bareSlug, catalog);
-  const rosterDescription = normalizeText(entry.description);
-
-  // The roster `name` is just the `cline-pass/…` slug, so it is no better than the bare slug as a
-  // display name — only the catalog match carries a human-readable name.
-  const displayName = (match && normalizeText(match.name)) ?? bareSlug;
-  const description = (match && normalizeText(match.description)) ?? rosterDescription;
-  const contextTokens = match ? toPositiveInt(match.context_length) : null;
-  const maxOutputTokens = match ? toPositiveInt(match.top_provider?.max_completion_tokens) : null;
-  const capabilities = match
-    ? catalogCapabilities(match)
-    : new Set<string>(["chat", "streaming", "tool_use"]);
+  const join = joinRosterEntry(entry, providerModelId, CLINE_PASS_PREFIX, catalog);
+  const { match, displayName, description, rosterDescription, contextTokens, maxOutputTokens, capabilities } = join;
+  const { canonicalId, canonicalConfidence } = join;
 
   // ClinePass is a flat monthly subscription — never billed per token. The underlying model's
   // pay-as-you-go rate is carried only as a cheap-vs-expensive signal (ADR 0006).
   const referenceInput = match ? usdPerMillionTokens(match.pricing?.prompt) : null;
   const referenceOutput = match ? usdPerMillionTokens(match.pricing?.completion) : null;
   const hasReferenceRate = referenceInput !== null || referenceOutput !== null;
-
-  const canonicalId = match ? canonicalSlug(normalizeText(match.id) ?? bareSlug) : providerModelId;
-  const canonicalConfidence = match ? "high" : "medium";
 
   return {
     id: `cline-pass:${providerModelId}`,
@@ -452,9 +609,13 @@ export const clineCollector: Collector = {
   id: "cline",
   async collect(context: CollectorContext): Promise<CollectorResult> {
     const observedAt = nowIso(context);
-    const response = await fetchJson<ClineCatalogResponse>(context, CATALOG_URL, {
-      headers: authHeaders(context)
-    });
+    const headers = authHeaders(context);
+    // The catalog states what Cline serves; the roster states which of those Cline serves free. The
+    // roster is the smaller read by two orders of magnitude, so both are fetched every run.
+    const [response, roster] = await Promise.all([
+      fetchJson<ClineCatalogResponse>(context, CATALOG_URL, { headers }),
+      fetchJson<ClineRecommendedResponse>(context, RECOMMENDED_URL, { headers })
+    ]);
 
     if (!response.ok) {
       return {
@@ -469,14 +630,45 @@ export const clineCollector: Collector = {
       };
     }
 
-    const models = (Array.isArray(response.data.data) ? response.data.data : [])
-      .map((raw, index) => normalizeClineCatalogModel(raw, observedAt, index))
+    // Without the roster, no free claim can be confirmed against Cline's own billing. The catalog
+    // still publishes, and every zero-priced offering degrades to low confidence.
+    const rosterEntries = roster.ok && Array.isArray(roster.data.free) ? roster.data.free : [];
+    const notices = roster.ok
+      ? []
+      : [
+          collectorNotice("cline", "free roster unavailable; zero-priced offerings degraded to low confidence", {
+            status: roster.status,
+            error: roster.error
+          })
+        ];
+
+    const catalogModels = Array.isArray(response.data.data) ? response.data.data : [];
+    const catalogIds = new Set(
+      catalogModels.map((raw) => normalizeText(raw.id)).filter((id): id is string => id !== null)
+    );
+    const freeRosterIds = new Set(
+      rosterEntries.map((entry) => normalizeText(entry.id)).filter((id): id is string => id !== null)
+    );
+
+    const models = catalogModels
+      .map((raw, index) => normalizeClineCatalogModel(raw, freeRosterIds, observedAt, index))
+      .filter((model): model is ModelOffering => model !== null);
+
+    // A roster id the catalog does not list is still a callable offering — Cline's own `cline-free/`
+    // namespace never appears in the resold catalog.
+    const rosterOnlyModels = rosterEntries
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => {
+        const id = normalizeText(entry.id);
+        return id !== null && !catalogIds.has(id);
+      })
+      .map(({ entry, index }) => normalizeClineFreeRosterModel(entry, catalogModels, observedAt, index))
       .filter((model): model is ModelOffering => model !== null);
 
     return {
       provider: clineProvider,
-      models,
-      notices: []
+      models: [...models, ...rosterOnlyModels],
+      notices
     };
   }
 };

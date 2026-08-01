@@ -9,8 +9,8 @@ import {
   nowIso,
   normalizeDatetime,
   normalizeText,
-  toPositiveInt,
-  usdPerMillionTokens
+  tokenPricing,
+  toPositiveInt
 } from "./shared";
 
 type DesignArenaEntry = {
@@ -154,10 +154,13 @@ function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, inde
     capabilityCandidates.add("vision");
   }
 
-  const promptPrice = usdPerMillionTokens(raw.pricing?.prompt);
-  const completionPrice = usdPerMillionTokens(raw.pricing?.completion);
-  const isFree = promptPrice === 0 && completionPrice === 0;
-  const pricingKind = isFree ? "free" : promptPrice === null || completionPrice === null ? "unknown" : "paid";
+  const pricing = tokenPricing({
+    prompt: raw.pricing?.prompt,
+    completion: raw.pricing?.completion,
+    outputModalities,
+    expiresAt: raw.expiration_date,
+    observedAt
+  });
   const artificialAnalysis = numericFields(raw.benchmarks?.artificial_analysis);
   const designArena = designArenaEntries(raw.benchmarks?.design_arena);
   const benchmarks = artificialAnalysis || designArena
@@ -203,26 +206,7 @@ function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, inde
       context_tokens: contextTokens,
       max_output_tokens: maxOutputTokens
     },
-    pricing: {
-      kind: pricingKind,
-      input_usd_per_1m_tokens: promptPrice,
-      output_usd_per_1m_tokens: completionPrice,
-      currency: isFree || promptPrice !== null || completionPrice !== null ? "USD" : null,
-      metering: "tokens",
-      free: isFree
-        ? {
-            is_currently_free: true,
-            basis: "zero_priced_model",
-            requires_account: true,
-            requires_api_key: true,
-            requires_credit_card: null,
-            quota: null,
-            expires_at: normalizeDatetime(raw.expiration_date),
-            last_verified_at: observedAt,
-            confidence: "high"
-          }
-        : null
-    },
+    pricing,
     availability: {
       status: expiration ?? "available",
       last_checked_at: observedAt,
@@ -320,7 +304,7 @@ function normalizeOpenRouterModel(raw: OpenRouterModel, observedAt: string, inde
       tags: Array.from(
         new Set(
           [
-            isFree ? "free" : null,
+            pricing.kind === "free" ? "free" : null,
             hasAnyKeyword(name, ["reasoning"]) ? "reasoning" : null
           ].filter((item): item is string => Boolean(item))
         )
