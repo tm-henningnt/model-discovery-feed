@@ -54,14 +54,32 @@ Important fields:
 When `pricing.kind = "free"`, `pricing.free` records:
 
 - `is_currently_free`
-- `basis`
+- `basis` — why the offering is free. `zero_priced_model` means the provider publishes a rate of zero.
+  `account_free_tier` means the provider states the offering is free to its account holders.
 - `requires_account`
 - `requires_api_key`
 - `requires_credit_card`
 - `quota`
 - `expires_at`
 - `last_verified_at`
-- `confidence`
+- `confidence` — how well the claim is sourced. See below.
+
+#### A free claim states how well it is sourced
+
+`pricing.free.confidence` says how directly the seller confirmed the claim:
+
+- `high` — the seller publishes the rate or the free tier itself.
+- `medium` — a secondary catalog supplied the rate.
+- `low` — a collector read a rate of zero it could not confirm against the seller's own billing. A
+  reseller that republishes another catalog's price list produces this: the zero is the upstream
+  price, and it says nothing about what the reseller charges.
+
+**The `free` filter returns high and medium claims only.** A `low` claim is a lead, not a fact, so
+`?free=true` excludes it. Read `?pricing_kind=free` to see every free claim including the unconfirmed
+ones, then check the provider's own pricing page.
+
+A stale claim is also excluded. The `free` filter drops any offering whose `last_verified_at` is older
+than its `availability.stale_after_seconds`.
 
 #### `unknown` does not mean "paid"
 
@@ -89,6 +107,10 @@ an offering is free on your account, treat your own knowledge as better than thi
   `pricing.subscription.plan_editions` for the editions that include the offering.
 - `images`, `video_seconds`, `characters`, `audio_seconds` — the provider bills per generated image, per
   second of output video, per character of input text, or per second of input audio.
+- `null` — the unit is unknown. The provider published a per-token rate of zero for an offering that
+  does not produce text, so the rate fields do not describe the bill. Such an offering states
+  `pricing.kind = "unknown"` with both rate fields `null`, and never a free claim. Read the provider's
+  own pricing page for the real unit.
 
 An offering can state `pricing.kind = "paid"` with both rate fields `null`. That combination means the
 price is known to exist but is not expressed in tokens; use `metering` to see which unit applies.

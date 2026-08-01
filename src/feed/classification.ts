@@ -8,8 +8,17 @@ export function hasStaleFreeClaim(model: ModelOffering, now = new Date()): boole
   return now.getTime() - verifiedAt > staleAfter * 1000;
 }
 
+// A low-confidence free claim states that a collector read a zero rate it could not confirm against
+// the seller's own billing — a reseller republishing an upstream price list, for example. That is a
+// hint for a reader, not a fact to filter on, so it does not satisfy the free filter.
 export function isConfidentlyFree(model: ModelOffering, now = new Date()): boolean {
-  return model.pricing.kind === "free" && model.pricing.free?.is_currently_free === true && !hasStaleFreeClaim(model, now);
+  const free = model.pricing.free;
+  return (
+    model.pricing.kind === "free" &&
+    free?.is_currently_free === true &&
+    free.confidence !== "low" &&
+    !hasStaleFreeClaim(model, now)
+  );
 }
 
 export function isFixtureSourceRevision(sourceRevision: string): boolean {

@@ -365,8 +365,10 @@ export const feedDocumentSchema = z
   });
 
 export type Capability = z.infer<typeof capabilitySchema>;
+export type Confidence = z.infer<typeof confidenceSchema>;
 export type EndpointProtocol = z.infer<typeof endpointProtocolSchema>;
 export type PricingKind = z.infer<typeof pricingKindSchema>;
+export type FreeBasis = z.infer<typeof freeBasisSchema>;
 export type AvailabilityStatus = z.infer<typeof availabilityStatusSchema>;
 export type SourceClaim = z.infer<typeof sourceClaimSchema>;
 export type Provider = z.infer<typeof providerSchema>;

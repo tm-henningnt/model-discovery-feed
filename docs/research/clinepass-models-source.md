@@ -296,6 +296,20 @@ provider (`cline-provider.md` is prose only; `api/models.md` documents the ID fo
   selector"; no numeric limits or sunset dates are published on these pages. (Contrast ClinePass, whose
   5-hour/weekly/monthly windows *are* documented.) The `free[]` membership is also liable to rotate —
   treat it as volatile.
+- **Re-checked 2026-08-01: the docs are now worse, not better.**
+  `https://docs.cline.bot/api/models.md` has **no free-models section at all** — the
+  `/api/models#free-models` anchor the bullet above cites is gone, and the page's "choosing a model"
+  table still recommends `anthropic/claude-sonnet-4-6` and `minimax/minimax-m2.5`, so it is stale by
+  several model generations. The `free[]` array on the `recommended-models` endpoint is therefore the
+  **only** source for Cline's free tier, and no quota is published anywhere. A collector must leave
+  `pricing.free.quota` null.
+- **The `free[]` namespace changed.** As of 2026-08-01 the array holds
+  `deepseek/deepseek-v4-flash`, `cline-free/glm-5.2`, `poolside/laguna-s-2.1:free`, and
+  `stepfun/step-3.7-flash`. Two points matter for a collector. First, `cline-free/…` is a Cline-owned
+  namespace like `cline-pass/…`, and the catalog never lists it — the offering exists only in the
+  roster, so it needs the same bare-slug join ClinePass uses. Second, two of the four carry a real
+  catalog rate ($0.14/$0.28 and $0.20/$1.15), which confirms that free-ness cannot be derived from the
+  catalog price. See ADR 0013.
 
 ## 5. Provider modeling — one `cline` provider, free/paid split
 

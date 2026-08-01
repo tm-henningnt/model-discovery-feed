@@ -27,6 +27,20 @@ describe("isConfidentlyFree", () => {
     model.pricing.free!.is_currently_free = false;
     expect(isConfidentlyFree(model, now)).toBe(false);
   });
+
+  it("returns false for a low-confidence free claim", () => {
+    // A collector reports low confidence when it read a zero rate it could not confirm against the
+    // seller's own billing. That is a hint for a reader, not a fact to filter on (ADR 0013).
+    const model = structuredClone(exampleFeed.models[0]);
+    model.pricing.free!.confidence = "low";
+    expect(isConfidentlyFree(model, now)).toBe(false);
+  });
+
+  it("returns true for a medium-confidence free claim", () => {
+    const model = structuredClone(exampleFeed.models[0]);
+    model.pricing.free!.confidence = "medium";
+    expect(isConfidentlyFree(model, now)).toBe(true);
+  });
 });
 
 describe("isFixtureSourceRevision", () => {

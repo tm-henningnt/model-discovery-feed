@@ -2,6 +2,9 @@
 
 Status: Accepted
 
+ADR 0013 revises this ADR: the `cline` provider takes its free claim from Cline's own `free[]` roster
+instead of from zero pricing, and its collector fetches that roster alongside the catalog.
+
 See also: ADR 0003 (OpenRouter-slug canonical namespace, which both providers join through) and
 ADR 0004 (cross-provider intrinsic-score propagation, which both providers benefit from). ADR 0007
 applies this same two-provider split to QwenCloud, and records why its subscription provider carries no

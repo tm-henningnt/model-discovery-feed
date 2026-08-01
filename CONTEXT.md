@@ -55,6 +55,17 @@ is a property of the sale, not a provider — the same model in both editions is
 edition tags. Consumers filter on it with `?plan_edition=`, and the explorer offers it as a facet, because
 filtering by provider alone over-selects for a subscriber on the smaller edition (see ADR 0012).
 
+**Free tier**:
+A provider's own statement that an offering costs its account holders nothing. Recorded as
+`pricing.free.basis = "account_free_tier"` with rates of 0, because 0 is what the account is billed. It
+is a fact about the sale, so a reseller's free tier says nothing about the same model sold elsewhere.
+Distinct from a **zero-priced offering** (`basis = "zero_priced_model"`), where the collector only read a
+published rate of zero. A reseller that republishes another catalog's rates lowers such a claim to
+`pricing.free.confidence = "low"`, and a low-confidence claim does not satisfy the free filter (see
+ADR 0013).
+_Avoid_: free (unqualified — say which of the two bases applies), `pricing.kind = "free_tier"` (that value
+means an allowance that runs out, and a free tier this feed confirms uses `pricing.kind = "free"`)
+
 **Availability**:
 Whether a consumer can still buy an offering from its provider. The status `available` means the provider currently lists the offering. The status does not claim the offering will answer requests. It does not guarantee any consumer can access it — providers can gate by region, account age, or plan. An offering that leaves the catalog becomes `retired` and stays in the feed for 7 days (see ADR 0008).
 _Avoid_: uptime, liveness, health (these suggest active monitoring the feed does not perform)

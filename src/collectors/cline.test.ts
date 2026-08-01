@@ -3,6 +3,7 @@ import { clineCollector, clinePassCollector } from "./cline";
 import type { CollectorContext } from "./types";
 
 const CATALOG_URL = "https://api.cline.bot/api/v1/ai/cline/models";
+const RECOMMENDED_URL = "https://api.cline.bot/api/v1/ai/cline/recommended-models";
 
 const catalogResponse = {
   data: [
@@ -27,19 +28,42 @@ const catalogResponse = {
       architecture: { input_modalities: ["text", "image"], output_modalities: ["text"] }
     },
     {
+      // Zero-priced upstream, and absent from Cline's own free roster.
       id: "tencent/hy3:free",
       name: "Tencent: HY3 (free)",
       context_length: 200000,
       pricing: { prompt: "0", completion: "0" },
       supported_parameters: ["tools"],
       architecture: { input_modalities: ["text"], output_modalities: ["text"] }
+    },
+    {
+      // Priced upstream, and listed in Cline's own free roster.
+      id: "deepseek/deepseek-v4-flash",
+      name: "DeepSeek: V4 Flash",
+      context_length: 1048576,
+      pricing: { prompt: "0.00000014", completion: "0.00000028" },
+      top_provider: { max_completion_tokens: 65536 },
+      supported_parameters: ["tools"],
+      architecture: { input_modalities: ["text"], output_modalities: ["text"] }
+    },
+    {
+      // A music model. It bills per song, so its per-token fields read "0".
+      id: "google/lyria-3-pro-preview",
+      name: "Google: Lyria 3 Pro Preview",
+      context_length: 1048576,
+      pricing: { prompt: "0", completion: "0" },
+      supported_parameters: ["response_format"],
+      architecture: { input_modalities: ["text"], output_modalities: ["text", "audio"] }
     }
   ]
 };
 
 const recommendedResponse = {
   recommended: [{ id: "openai/gpt-5.6-sol", name: "gpt-5.6-sol", tags: ["NEW"] }],
-  free: [{ id: "tencent/hy3:free", name: "hy3" }],
+  free: [
+    { id: "deepseek/deepseek-v4-flash", name: "deepseek-v4-flash", description: "Fast and efficient" },
+    { id: "cline-free/glm-5.2", name: "cline-free/glm-5.2", description: "Z.ai's frontier open weights model" }
+  ],
   clinePass: [
     { id: "cline-pass/glm-5.2", name: "cline-pass/glm-5.2", description: "Best open weights model", tags: [] },
     { id: "cline-pass/kimi-k2.7-code", name: "cline-pass/kimi-k2.7-code", description: "Coding specialist", tags: [] },
@@ -60,6 +84,9 @@ function createContext(overrides: {
     const url = String(input);
     overrides.onRequest?.(url, init);
     const isCatalog = url === CATALOG_URL;
+    if (!isCatalog && url !== RECOMMENDED_URL) {
+      throw new Error(`unexpected request to ${url}`);
+    }
     const failStatus = isCatalog ? overrides.failures?.catalog : overrides.failures?.recommended;
     if (failStatus) {
       return new Response(JSON.stringify({ error: "boom" }), { status: failStatus });
@@ -85,7 +112,11 @@ describe("clineCollector", () => {
     expect(result.models.map((m) => m.id)).toEqual([
       "cline:z-ai/glm-5.2",
       "cline:moonshotai/kimi-k2.7-code",
-      "cline:tencent/hy3:free"
+      "cline:tencent/hy3:free",
+      "cline:deepseek/deepseek-v4-flash",
+      "cline:google/lyria-3-pro-preview",
+      // A free-roster id the catalog does not list still becomes an offering.
+      "cline:cline-free/glm-5.2"
     ]);
     expect(result.notices).toEqual([]);
   });
@@ -118,6 +149,127 @@ describe("clineCollector", () => {
     expect(free?.pricing.kind).toBe("free");
     expect(free?.pricing.free?.is_currently_free).toBe(true);
     expect(free?.policy.tags).toContain("free");
+  });
+
+  it("trusts the Cline free roster over the resold catalog rate", async () => {
+    const result = await clineCollector.collect(createContext({}));
+
+    // Cline lists this offering as free; the catalog states OpenRouter's pay-as-you-go rate.
+    const deepseek = result.models.find((m) => m.id === "cline:deepseek/deepseek-v4-flash");
+    expect(deepseek?.pricing.kind).toBe("free");
+    expect(deepseek?.pricing.input_usd_per_1m_tokens).toBe(0);
+    expect(deepseek?.pricing.output_usd_per_1m_tokens).toBe(0);
+    expect(deepseek?.pricing.free).toMatchObject({
+      basis: "account_free_tier",
+      confidence: "high"
+    });
+    expect(deepseek?.policy.tags).toContain("free");
+  });
+
+  it("records the catalog rate a free-roster offering is not billed", async () => {
+    const result = await clineCollector.collect(createContext({}));
+
+    const deepseek = result.models.find((m) => m.id === "cline:deepseek/deepseek-v4-flash");
+    expect(deepseek?.source_claims[0]?.raw_reference).toMatchObject({
+      free_roster_source_url: RECOMMENDED_URL,
+      catalog_input_usd_per_1m_tokens: 0.14,
+      catalog_output_usd_per_1m_tokens: 0.28
+    });
+  });
+
+  it("marks an unconfirmed zero catalog rate as a low-confidence free claim", async () => {
+    const result = await clineCollector.collect(createContext({}));
+
+    // Cline resells OpenRouter's catalog, so this zero is OpenRouter's price, not Cline's (ADR 0013).
+    const hy3 = result.models.find((m) => m.id === "cline:tencent/hy3:free");
+    expect(hy3?.pricing.free).toMatchObject({
+      basis: "zero_priced_model",
+      confidence: "low"
+    });
+  });
+
+  it("makes no free claim for an offering that is not metered in tokens", async () => {
+    const result = await clineCollector.collect(createContext({}));
+
+    // A music model bills per song, so its zero per-token rate says nothing about price.
+    const lyria = result.models.find((m) => m.id === "cline:google/lyria-3-pro-preview");
+    expect(lyria?.pricing.kind).toBe("unknown");
+    expect(lyria?.pricing.input_usd_per_1m_tokens).toBeNull();
+    expect(lyria?.pricing.metering).toBeNull();
+    expect(lyria?.pricing.free).toBeNull();
+    expect(lyria?.policy.tags).not.toContain("free");
+  });
+
+  it("joins a free-roster offering that the catalog does not list to its catalog sibling", async () => {
+    const result = await clineCollector.collect(createContext({}));
+
+    // `cline-free/glm-5.2` has no catalog entry; the bare slug resolves to `z-ai/glm-5.2`.
+    const clineFree = result.models.find((m) => m.id === "cline:cline-free/glm-5.2");
+    expect(clineFree?.display_name).toBe("Z.ai: GLM 5.2");
+    expect(clineFree?.canonical_model?.id).toBe("z-ai/glm-5.2");
+    expect(clineFree?.canonical_model?.confidence).toBe("high");
+    expect(clineFree?.limits.context_tokens).toBe(1048576);
+    expect(clineFree?.pricing.kind).toBe("free");
+    expect(clineFree?.pricing.free?.basis).toBe("account_free_tier");
+    expect(clineFree?.quality.recommendation_notes).toContain("Z.ai's frontier open weights model");
+  });
+
+  it("falls back to a medium-confidence canonical model when a free-roster slug is not in the catalog", async () => {
+    const result = await clineCollector.collect(
+      createContext({
+        bodies: {
+          recommended: { free: [{ id: "cline-free/ghost-model", name: "cline-free/ghost-model" }], clinePass: [] }
+        }
+      })
+    );
+
+    const ghost = result.models.find((m) => m.id === "cline:cline-free/ghost-model");
+    expect(ghost?.display_name).toBe("ghost-model");
+    expect(ghost?.canonical_model?.id).toBe("cline-free/ghost-model");
+    expect(ghost?.canonical_model?.confidence).toBe("medium");
+    expect(ghost?.limits.context_tokens).toBeNull();
+    // Cline still states it is free, so the claim holds even without a catalog join.
+    expect(ghost?.pricing.free?.basis).toBe("account_free_tier");
+  });
+
+  it("degrades every free claim to low confidence when the roster is unavailable", async () => {
+    const result = await clineCollector.collect(createContext({ failures: { recommended: 502 } }));
+
+    // The catalog still publishes; only the seller-confirmed free claims are lost.
+    expect(result.models.map((m) => m.id)).toEqual([
+      "cline:z-ai/glm-5.2",
+      "cline:moonshotai/kimi-k2.7-code",
+      "cline:tencent/hy3:free",
+      "cline:deepseek/deepseek-v4-flash",
+      "cline:google/lyria-3-pro-preview"
+    ]);
+    expect(result.notices).toEqual([
+      expect.objectContaining({
+        collector: "cline",
+        message: expect.stringContaining("free roster unavailable"),
+        status: 502
+      })
+    ]);
+
+    expect(result.models.every((m) => m.pricing.free?.basis !== "account_free_tier")).toBe(true);
+    expect(result.models.find((m) => m.id === "cline:tencent/hy3:free")?.pricing.free?.confidence).toBe("low");
+    // Without the roster, the rate is all the collector knows, so this reads paid again.
+    expect(result.models.find((m) => m.id === "cline:deepseek/deepseek-v4-flash")?.pricing.kind).toBe("paid");
+  });
+
+  it("sends the CLINE_API_KEY as a bearer token to the roster endpoint", async () => {
+    const seen = new Map<string, string | null>();
+    await clineCollector.collect(
+      createContext({
+        env: { CLINE_API_KEY: "cline_test_key" },
+        onRequest: (url, init) => {
+          seen.set(url, new Headers(init?.headers).get("authorization"));
+        }
+      })
+    );
+
+    expect(seen.get(CATALOG_URL)).toBe("Bearer cline_test_key");
+    expect(seen.get(RECOMMENDED_URL)).toBe("Bearer cline_test_key");
   });
 
   it("sends the CLINE_API_KEY as a bearer token when present", async () => {

@@ -9,8 +9,8 @@ import {
   nowIso,
   normalizeText,
   stripModelPrefix,
-  toPositiveInt,
-  usdPerMillionTokens
+  tokenPricing,
+  toPositiveInt
 } from "./shared";
 
 type GroqModel = {
@@ -94,10 +94,13 @@ function normalizeGroqModel(raw: GroqModel, observedAt: string, index: number): 
 
   const providerModelUrl = `https://api.groq.com/openai/v1/models/${providerModelId}`;
 
-  const promptPrice = usdPerMillionTokens(raw.pricing?.prompt);
-  const completionPrice = usdPerMillionTokens(raw.pricing?.completion);
-  const isFree = promptPrice === 0 && completionPrice === 0;
-  const pricingKind = isFree ? "free" : promptPrice === null || completionPrice === null ? "unknown" : "paid";
+  // Groq publishes no output modalities, so the meter is taken to be tokens and the zero-price
+  // reading is Groq's own price rather than a resold catalog's.
+  const pricing = tokenPricing({
+    prompt: raw.pricing?.prompt,
+    completion: raw.pricing?.completion,
+    observedAt
+  });
 
   return {
     id: `groq:${providerModelId}`,
@@ -126,26 +129,7 @@ function normalizeGroqModel(raw: GroqModel, observedAt: string, index: number): 
       context_tokens: contextTokens,
       max_output_tokens: maxOutputTokens
     },
-    pricing: {
-      kind: pricingKind,
-      input_usd_per_1m_tokens: promptPrice,
-      output_usd_per_1m_tokens: completionPrice,
-      currency: isFree || promptPrice !== null || completionPrice !== null ? "USD" : null,
-      metering: "tokens",
-      free: isFree
-        ? {
-            is_currently_free: true,
-            basis: "zero_priced_model",
-            requires_account: true,
-            requires_api_key: true,
-            requires_credit_card: null,
-            quota: null,
-            expires_at: null,
-            last_verified_at: observedAt,
-            confidence: "high"
-          }
-        : null
-    },
+    pricing,
     availability: {
       status: "available",
       last_checked_at: observedAt,
