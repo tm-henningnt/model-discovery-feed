@@ -1,6 +1,7 @@
 import { exampleFeed } from "./fixture";
 import { applyManualOverrides, type ManualOverrideInput } from "./overrides";
 import { validateFeedDocument, type FeedDocument } from "./schema";
+import { decodeFeedSnapshot } from "./snapshot-codec";
 import { getPrismaClient } from "@/server/prisma";
 
 /**
@@ -21,7 +22,7 @@ function describeError(error: unknown): string {
  * takes the two identity columns.
  */
 type PublishedFeedRelease = {
-  snapshotJson?: unknown;
+  snapshotGzip?: Uint8Array | null;
   generatedAt?: Date;
   sourceRevision?: string;
 };
@@ -31,13 +32,15 @@ type PrismaFeedReader = {
     findFirst(args: {
       where: {
         status: "published";
+        snapshotGzip: { not: null };
       };
       orderBy: {
         generatedAt: "desc";
       };
-      select?: {
-        generatedAt: true;
-        sourceRevision: true;
+      select: {
+        snapshotGzip?: true;
+        generatedAt?: true;
+        sourceRevision?: true;
       };
     }): Promise<PublishedFeedRelease | null>;
   };
@@ -115,11 +118,12 @@ export class OptionalPrismaFeedStore implements FeedStore {
     try {
       const prisma = this.prisma ?? (getPrismaClient() as unknown as PrismaFeedReader);
       const release = await prisma.feedRelease.findFirst({
-        where: { status: "published" },
-        orderBy: { generatedAt: "desc" }
+        where: { status: "published", snapshotGzip: { not: null } },
+        orderBy: { generatedAt: "desc" },
+        select: { snapshotGzip: true }
       });
 
-      if (!release) {
+      if (!release?.snapshotGzip) {
         throw new Error("No published feed release found");
       }
 
@@ -136,7 +140,7 @@ export class OptionalPrismaFeedStore implements FeedStore {
 
       const feed = validateFeedDocument(
         applyManualOverrides(
-          validateFeedDocument(release.snapshotJson),
+          validateFeedDocument(decodeFeedSnapshot(release.snapshotGzip)),
           overrides.map((override): ManualOverrideInput => ({
             targetFieldPath: override.targetFieldPath,
             value: override.value,
@@ -175,8 +179,11 @@ export class OptionalPrismaFeedStore implements FeedStore {
 
     try {
       const prisma = this.prisma ?? (getPrismaClient() as unknown as PrismaFeedReader);
+      // The same `snapshotGzip` filter as `getFeed`, so both reads answer for
+      // the same release. Without it this reports a release that `getFeed`
+      // cannot serve.
       const release = await prisma.feedRelease.findFirst({
-        where: { status: "published" },
+        where: { status: "published", snapshotGzip: { not: null } },
         orderBy: { generatedAt: "desc" },
         select: { generatedAt: true, sourceRevision: true }
       });

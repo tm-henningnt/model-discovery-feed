@@ -1,6 +1,7 @@
 import { ZodError } from "zod";
 import type { FeedDocument, Provider } from "../feed/schema";
 import { validateFeedDocument } from "../feed/schema";
+import { decodeFeedSnapshot, encodeFeedSnapshot } from "../feed/snapshot-codec";
 import {
   ARTIFICIAL_ANALYSIS_API_URL,
   ARTIFICIAL_ANALYSIS_COLLECTOR_ID,
@@ -81,27 +82,34 @@ export type PrismaPublishClient = {
         status: string;
         generatedAt: Date;
         sourceRevision: string;
-        snapshotJson: FeedDocument;
+        snapshotGzip: Uint8Array<ArrayBuffer>;
       };
     }): Promise<unknown>;
     findFirst(args: {
-      where: { status: "published" };
+      where: { status: "published"; snapshotGzip: { not: null } };
       orderBy: { generatedAt: "desc" };
-    }): Promise<{ snapshotJson: unknown } | null>;
+      select: { snapshotGzip: true };
+    }): Promise<{ snapshotGzip: Uint8Array | null } | null>;
   };
 };
 
+/**
+ * Reads the newest release that carries a gzipped snapshot. A release written
+ * before the snapshot was compressed is not readable over a pooled connection,
+ * so the query skips it and the run continues without a baseline.
+ */
 async function latestPublishedRelease(prisma: PrismaPublishClient): Promise<FeedDocument | null> {
   const release = await prisma.feedRelease.findFirst({
-    where: { status: "published" },
-    orderBy: { generatedAt: "desc" }
+    where: { status: "published", snapshotGzip: { not: null } },
+    orderBy: { generatedAt: "desc" },
+    select: { snapshotGzip: true }
   });
 
-  if (!release) {
+  if (!release?.snapshotGzip) {
     return null;
   }
 
-  return validateFeedDocument(release.snapshotJson);
+  return validateFeedDocument(decodeFeedSnapshot(release.snapshotGzip));
 }
 
 async function latestArtificialAnalysisSnapshot(
@@ -267,7 +275,7 @@ export async function runCollectorsAndPublish(options: {
         status: "published",
         generatedAt,
         sourceRevision: validated.feed.source_revision,
-        snapshotJson: validated
+        snapshotGzip: encodeFeedSnapshot(validated)
       }
     });
   }

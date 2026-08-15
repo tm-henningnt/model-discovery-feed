@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { exampleFeed } from "./fixture";
+import { encodeFeedSnapshot } from "./snapshot-codec";
 import { OptionalPrismaFeedStore } from "./store";
 
 const originalModelFeedUseDatabase = process.env.MODEL_FEED_USE_DATABASE;
@@ -61,7 +62,7 @@ describe("OptionalPrismaFeedStore", () => {
 
     const store = new OptionalPrismaFeedStore(undefined, {
       feedRelease: {
-        findFirst: vi.fn(async () => ({ snapshotJson: exampleFeed }))
+        findFirst: vi.fn(async () => ({ snapshotGzip: encodeFeedSnapshot(exampleFeed) }))
       },
       manualOverride: {
         findMany: vi.fn(async () => [])
@@ -84,7 +85,7 @@ describe("OptionalPrismaFeedStore", () => {
       getRevision: fallbackRevision
     }, {
       feedRelease: {
-        findFirst: vi.fn(async () => ({ snapshotJson: exampleFeed }))
+        findFirst: vi.fn(async () => ({ snapshotGzip: encodeFeedSnapshot(exampleFeed) }))
       },
       manualOverride: {
         findMany: vi.fn(async () => {
@@ -137,7 +138,7 @@ describe("OptionalPrismaFeedStore.getRevision", () => {
       sourceRevision: "collector-run-2026-07-28T08:00:00.000Z"
     });
     expect(findFirst).toHaveBeenCalledWith({
-      where: { status: "published" },
+      where: { status: "published", snapshotGzip: { not: null } },
       orderBy: { generatedAt: "desc" },
       select: { generatedAt: true, sourceRevision: true }
     });

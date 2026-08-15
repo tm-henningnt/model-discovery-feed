@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { exampleFeed } from "../feed/fixture";
-import type { FeedDocument, ModelOffering, Provider } from "../feed/schema";
+import type { ModelOffering, Provider } from "../feed/schema";
 import { validateFeedDocument } from "../feed/schema";
+import { decodeFeedSnapshot, encodeFeedSnapshot } from "../feed/snapshot-codec";
 import { mergeCollectorFeed } from "./index";
 import { runCollectorsAndPublish, type PrismaPublishClient } from "./publish";
 import type { Collector, CollectorContext, CollectorNotice } from "./types";
@@ -43,7 +44,7 @@ type FakeFeedRelease = {
   status: string;
   generatedAt: Date;
   sourceRevision: string;
-  snapshotJson: FeedDocument;
+  snapshotGzip: Uint8Array<ArrayBuffer>;
 };
 
 // Tests must declare every fetch they expect.
@@ -184,7 +185,7 @@ function createFakePrisma(
       async findFirst({ where }) {
         return (
           state.feedReleases
-            .filter((release) => release.status === where.status)
+            .filter((release) => release.status === where.status && release.snapshotGzip != null)
             .sort((left, right) => right.generatedAt.getTime() - left.generatedAt.getTime())[0] ?? null
         );
       }
@@ -287,9 +288,10 @@ describe("runCollectorsAndPublish", () => {
     expect(prisma.state.feedReleases).toHaveLength(1);
     expect(prisma.state.feedReleases[0]).toMatchObject({
       status: "published",
-      sourceRevision: "collector-run-2026-07-08T12:34:56.000Z",
-      snapshotJson: published
+      sourceRevision: "collector-run-2026-07-08T12:34:56.000Z"
     });
+    // The release stores gzipped JSON, so read it back through the codec.
+    expect(decodeFeedSnapshot(prisma.state.feedReleases[0]!.snapshotGzip)).toEqual(published);
   });
 
   it("persists the raw Artificial Analysis response in publish mode", async () => {
@@ -445,7 +447,7 @@ describe("runCollectorsAndPublish", () => {
       status: "published",
       generatedAt: new Date("2026-07-08T11:00:00.000Z"),
       sourceRevision: "collector-run-2026-07-08T11:00:00.000Z",
-      snapshotJson: structuredClone(exampleFeed)
+      snapshotGzip: encodeFeedSnapshot(structuredClone(exampleFeed))
     };
     const prisma = createFakePrisma([previousRelease]);
 
@@ -475,7 +477,8 @@ describe("runCollectorsAndPublish", () => {
       notices: [{ collector: "gemini", message: "partial collector failure", status: 502 }],
       validation_error: "feed validation failed: unknown provider id: missing-provider"
     });
-    expect(prisma.state.feedReleases).toEqual([previousRelease]);
+    expect(prisma.state.feedReleases).toHaveLength(1);
+    expect(prisma.state.feedReleases[0]?.id).toBe(previousRelease.id);
   });
 
   it("excludes models from the base feed that are not in the collector list", () => {
@@ -696,7 +699,7 @@ describe("runCollectorsAndPublish availability lifecycle (ADR 0008)", () => {
         status: "published",
         generatedAt: previousNow,
         sourceRevision: "collector-run-seed",
-        snapshotJson: previousFeed
+        snapshotGzip: encodeFeedSnapshot(previousFeed)
       }
     ]);
 

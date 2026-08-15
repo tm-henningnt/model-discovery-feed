@@ -74,8 +74,8 @@ renames its editions would break that consumer silently. `plan_edition` reads th
 ### Model plan editions relationally
 
 An `Edition` table with a join to offerings would make the roster queryable in SQL. Rejected as
-premature: `plan_editions` lives inside the existing `PricingObservation.subscription` and
-`FeedRelease.snapshotJson` JSON columns, no query in this repo needs SQL-side edition filtering, and
+premature: `plan_editions` lives inside the existing `PricingObservation.subscription` column and the
+`FeedRelease` snapshot, no query in this repo needs SQL-side edition filtering, and
 the feed is read as a document.
 
 ## Consequences

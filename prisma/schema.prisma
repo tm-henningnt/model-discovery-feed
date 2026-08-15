@@ -130,12 +130,17 @@ model ManualOverride {
   createdAt       DateTime @default(now())
 }
 
+// A release stores its snapshot gzipped in `snapshotGzip`, because the raw JSON
+// is above the 5 MB response limit of a pooled Prisma Postgres connection.
+// `snapshotJson` holds the raw JSON of releases written before that change. A
+// reader takes the newest release that has a `snapshotGzip`.
 model FeedRelease {
   id            String   @id @default(cuid())
   status        String
   generatedAt   DateTime @default(now())
   sourceRevision String
-  snapshotJson  Json
+  snapshotJson  Json?
+  snapshotGzip  Bytes?
   createdAt     DateTime @default(now())
 }
 
