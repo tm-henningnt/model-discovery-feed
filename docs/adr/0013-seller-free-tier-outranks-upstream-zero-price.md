@@ -16,8 +16,9 @@ A reseller republishes another catalog's price list. Cline serves OpenRouter's c
 OpenRouter's slugs, so a `:free` variant reads `$0` because that is OpenRouter's price. It is not a
 statement about Cline's billing. Cline publishes its own free tier separately, as a `free[]` array on
 `api.cline.bot/api/v1/ai/cline/recommended-models`, partly in a `cline-free/` namespace the resold
-catalog never lists. The feed published 17 Cline offerings as free at high confidence. Cline's own
-free tier held 4. The two sets shared one member.
+catalog never lists. At the time of this decision the feed published 17 Cline offerings as free at
+high confidence, against 4 in Cline's own free tier, and the two sets shared one member. Those counts
+record the defect; they are not a target. The roster is Cline's to resize.
 
 A model is not billed per token. `google/lyria-3-pro-preview` generates music and bills $0.08 per
 song. Its `prompt` and `completion` fields read `"0"` because those fields do not apply to it. The
@@ -78,8 +79,9 @@ creator-prefix-tolerant join that no current requirement justifies.
 
 ## Consequences
 
-- The `free` filter returns fewer Cline offerings: 4 seller-confirmed instead of 17 derived. The other
-  14 stay in the catalog as low-confidence free claims, reachable by `pricing_kind=free`.
+- The `free` filter returns only the Cline offerings the `free[]` roster names. Cline sizes that
+  roster and changes it without notice, so the count moves on its own. Every other zero-rate Cline
+  offering stays in the catalog as a low-confidence free claim, reachable by `pricing_kind=free`.
 - `pricing.free.confidence` is now load-bearing. A collector that lowers it removes the offering from
   the free filter, so `"low"` must mean "unconfirmed against the seller", never "slightly unsure".
 - Two music models move from `free` to `unknown` under both `cline` and `openrouter`, with null rates.

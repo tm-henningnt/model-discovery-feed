@@ -56,6 +56,9 @@ When `pricing.kind = "free"`, `pricing.free` records:
 - `is_currently_free`
 - `basis` — why the offering is free. `zero_priced_model` means the provider publishes a rate of zero.
   `account_free_tier` means the provider states the offering is free to its account holders.
+  A flat-rate plan provider publishes a reference rate per model. A rate of zero on one member of
+  that roster reads as `free`, not `subscription_included`, and the offering carries no
+  `pricing.subscription` block. Read `pricing.kind` to route a plan call, not the block.
 - `requires_account`
 - `requires_api_key`
 - `requires_credit_card`
