@@ -48,9 +48,11 @@ Example GitHub Actions secrets:
 
 - `DATABASE_URL`
 - `OPENROUTER_API_KEY`
+- `ARTIFICIALANALYSIS_API_KEY`
 - `GROQ_API_KEY`
 - `GEMINI_API_KEY`
-- `GH_MODELS_TOKEN` (GitHub Actions rejects secret names starting with `GITHUB_`)
+- `OPENCODE_API_KEY`
+- `CLINE_API_KEY`
 
 The workflow runs:
 

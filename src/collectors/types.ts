@@ -13,7 +13,6 @@ export type CollectorId =
   | "openrouter"
   | "groq"
   | "gemini"
-  | "github-models"
   | "opencode-go"
   | "opencode-zen"
   | "cline"

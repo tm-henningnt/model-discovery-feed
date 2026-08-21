@@ -54,7 +54,6 @@ export type ModelsDevEnrichmentResult = {
 export const modelsDevProviderByProviderId: Record<string, string> = {
   gemini: "google",
   groq: "groq",
-  "github-models": "github-models",
   openrouter: "openrouter",
   "opencode-go": "opencode-go",
   "opencode-zen": "opencode",
@@ -67,14 +66,13 @@ export const modelsDevProviderByProviderId: Record<string, string> = {
 /*
  * Gemini's ListModels response does not expose a capability array, so absence
  * of tool/reasoning/vision there is a genuine gap. Groq's supported_features
- * and modalities, GitHub Models' capabilities and modalities, and
- * OpenRouter's supported_parameters, modalities, and reasoning fields do
- * explicitly enumerate these dimensions; their absence is authoritative.
+ * and modalities, and OpenRouter's supported_parameters, modalities, and
+ * reasoning fields do explicitly enumerate these dimensions; their absence is
+ * authoritative.
  */
 const capabilityGapFillAllowed: Record<string, boolean> = {
   gemini: true,
   groq: false,
-  "github-models": false,
   openrouter: false,
   // The OpenCode listing endpoints expose no capability flags, so models.dev is the only source.
   "opencode-go": true,

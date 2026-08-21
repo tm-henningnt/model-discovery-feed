@@ -2,7 +2,6 @@ import type { FeedDocument, FeedProfile, ModelOffering, Provider } from "../feed
 import { exampleFeed } from "../feed/fixture";
 import { DELEGATION_PROFILE_IDS, rankByProfile, type DelegationProfileId } from "../feed/ranking";
 import { geminiCollector } from "./gemini";
-import { githubModelsCollector } from "./github-models";
 import { groqCollector } from "./groq";
 import { openrouterCollector } from "./openrouter";
 import { opencodeGoCollector, opencodeZenCollector } from "./opencode";
@@ -14,7 +13,6 @@ export const collectors: Collector[] = [
   openrouterCollector,
   groqCollector,
   geminiCollector,
-  githubModelsCollector,
   opencodeGoCollector,
   opencodeZenCollector,
   clineCollector,
