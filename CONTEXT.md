@@ -60,7 +60,8 @@ A provider's own statement that an offering costs its account holders nothing. R
 `pricing.free.basis = "account_free_tier"` with rates of 0, because 0 is what the account is billed. It
 is a fact about the sale, so a reseller's free tier says nothing about the same model sold elsewhere.
 Distinct from a **zero-priced offering** (`basis = "zero_priced_model"`), where the collector only read a
-published rate of zero. A reseller that republishes another catalog's rates lowers such a claim to
+published rate of zero. A flat-rate plan roster states a reference rate per model, so a rate of zero on
+one member reads as `pricing.kind = "free"` and drops `pricing.subscription` (ADR 0015). A reseller that republishes another catalog's rates lowers such a claim to
 `pricing.free.confidence = "low"`, and a low-confidence claim does not satisfy the free filter (see
 ADR 0013).
 _Avoid_: free (unqualified — say which of the two bases applies), `pricing.kind = "free_tier"` (that value

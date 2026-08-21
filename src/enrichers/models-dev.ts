@@ -10,6 +10,7 @@ export const MODELS_DEV_COLLECTOR_ID = "models-dev";
 const modelsDevModelSchema = z
   .object({
     id: z.unknown().optional(),
+    description: z.unknown().optional(),
     attachment: z.unknown().optional(),
     reasoning: z.unknown().optional(),
     tool_call: z.unknown().optional(),
@@ -190,6 +191,14 @@ function enrichOffering(model: ModelOffering, source: ModelsDevModel, modelsDevP
     }
   }
 
+  // models.dev publishes the provider's own one-line blurb. It is gap-filled only into a null
+  // description, and it is the evidence `derive-coding-capability` reads for a model whose id and
+  // display name name no coding keyword.
+  const description = model.description === null ? normalizeText(source.description) : null;
+  if (description !== null) {
+    fieldPaths.push("description");
+  }
+
   const providerInput = model.pricing.input_usd_per_1m_tokens;
   const providerOutput = model.pricing.output_usd_per_1m_tokens;
   // models.dev `cost` is already denominated per 1M tokens, matching our pricing fields.
@@ -209,16 +218,26 @@ function enrichOffering(model: ModelOffering, source: ModelsDevModel, modelsDevP
       const nextInput = providerInput ?? filledInput;
       const nextOutput = providerOutput ?? filledOutput;
       const isFree = nextInput === 0 && nextOutput === 0;
+      // A plan roster states a reference rate per model, so a rate of 0 states that this model
+      // costs nothing. `subscription_included` would tell a reader to buy the plan first, so a
+      // zero reference rate promotes to `free` from that kind as well as from `unknown`. The
+      // roster must publish a real rate for its other models for this to hold, which is why
+      // `pricingGapFillAllowed` stays off for `qwencloud-token-plan`, whose every rate is 0.
+      const promotableToFree = model.pricing.kind === "unknown" || model.pricing.kind === "subscription_included";
       const nextKind =
-        model.pricing.kind !== "unknown"
-          ? model.pricing.kind
-          : isFree
-            ? "free"
+        isFree && promotableToFree
+          ? "free"
+          : model.pricing.kind !== "unknown"
+            ? model.pricing.kind
             : nextInput !== null && nextOutput !== null
               ? "paid"
               : model.pricing.kind;
+      // A free offering has no plan to drain, so the subscription block would read as a purchase
+      // the reader does not have to make.
+      const { subscription: priorSubscription, ...pricingWithoutSubscription } = model.pricing;
+      const dropSubscription = nextKind === "free" && priorSubscription !== undefined;
       pricing = {
-        ...model.pricing,
+        ...(dropSubscription ? pricingWithoutSubscription : model.pricing),
         input_usd_per_1m_tokens: nextInput,
         output_usd_per_1m_tokens: nextOutput,
         kind: nextKind,
@@ -242,6 +261,7 @@ function enrichOffering(model: ModelOffering, source: ModelsDevModel, modelsDevP
       if (filledOutput !== null) fieldPaths.push("pricing.output_usd_per_1m_tokens");
       if (nextKind !== model.pricing.kind) fieldPaths.push("pricing.kind");
       if (nextKind === "free" && !model.pricing.free) fieldPaths.push("pricing.free");
+      if (dropSubscription) fieldPaths.push("pricing.subscription");
     }
   }
 
@@ -255,6 +275,7 @@ function enrichOffering(model: ModelOffering, source: ModelsDevModel, modelsDevP
     : {
         ...model,
         capabilities,
+        description: description ?? model.description,
         limits: {
           ...model.limits,
           context_tokens: contextTokens ?? model.limits.context_tokens,

@@ -46,6 +46,15 @@ const capturedPayloadExcerpt = {
         tool_call: true,
         limit: { context: 1_000_000, output: 131_072 },
         cost: { input: 0.3, output: 1.2, cache_read: 0.06 }
+      },
+      "ox-alpha-free": {
+        id: "ox-alpha-free",
+        name: "Ox Alpha Free (Unlimited)",
+        description: "Stealth reasoning model for coding, agentic tasks, and tool use",
+        reasoning: true,
+        tool_call: true,
+        limit: { context: 1_000_000, output: 131_072 },
+        cost: { input: 0, output: 0, cache_read: 0 }
       }
     }
   },
@@ -304,6 +313,81 @@ describe("enrichWithModelsDev", () => {
     });
     const claim = result.models[0]?.source_claims.find((c) => c.collector === "models-dev");
     expect(claim?.field_paths).toEqual(expect.arrayContaining(["pricing.kind", "pricing.free"]));
+  });
+
+  it("promotes a zero-rate model on a subscription roster to free and drops the subscription block", async () => {
+    // OpenCode Go bills a flat monthly plan, so its collector stamps every offering
+    // `subscription_included` with a reference rate. `ox-alpha-free` is the one model the roster
+    // prices at 0, and it is callable without the plan, so it must read `free`.
+    const go = nullPricedOffering("opencode-go", "ox-alpha-free");
+    go.pricing = {
+      ...go.pricing,
+      kind: "subscription_included",
+      subscription: { billing: "flat_monthly", per_token_billed: false, reference_pricing: true }
+    };
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [go], context: context(successfulFetch) });
+
+    expect(result.models[0]?.pricing.kind).toBe("free");
+    expect(result.models[0]?.pricing.input_usd_per_1m_tokens).toBe(0);
+    expect(result.models[0]?.pricing.output_usd_per_1m_tokens).toBe(0);
+    expect(result.models[0]?.pricing.free).toMatchObject({
+      is_currently_free: true,
+      basis: "zero_priced_model",
+      confidence: "medium"
+    });
+    expect(result.models[0]?.pricing.subscription).toBeUndefined();
+    const claim = result.models[0]?.source_claims.find((c) => c.collector === "models-dev");
+    expect(claim?.field_paths).toEqual(
+      expect.arrayContaining(["pricing.kind", "pricing.free", "pricing.subscription"])
+    );
+  });
+
+  it("keeps subscription_included when the roster prices the model above zero", async () => {
+    const go = nullPricedOffering("opencode-go", "minimax-m3");
+    go.pricing = {
+      ...go.pricing,
+      kind: "subscription_included",
+      subscription: { billing: "flat_monthly", per_token_billed: false, reference_pricing: true }
+    };
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [go], context: context(successfulFetch) });
+
+    expect(result.models[0]?.pricing.kind).toBe("subscription_included");
+    expect(result.models[0]?.pricing.free).toBeNull();
+    expect(result.models[0]?.pricing.subscription).toMatchObject({ reference_pricing: true });
+  });
+
+  it("gap-fills a null description from models.dev and claims the field", async () => {
+    const go = nullPricedOffering("opencode-go", "ox-alpha-free");
+    go.description = null;
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [go], context: context(successfulFetch) });
+
+    expect(result.models[0]?.description).toBe("Stealth reasoning model for coding, agentic tasks, and tool use");
+    expect(result.models[0]?.source_claims.find((c) => c.collector === "models-dev")?.field_paths).toContain(
+      "description"
+    );
+  });
+
+  it("never overwrites a first-party description with models.dev's", async () => {
+    const go = nullPricedOffering("opencode-go", "ox-alpha-free");
+    go.description = "First-party blurb";
+    const successfulFetch: typeof fetch = async () =>
+      new Response(JSON.stringify(capturedPayloadExcerpt), { status: 200 });
+
+    const result = await enrichWithModelsDev({ models: [go], context: context(successfulFetch) });
+
+    expect(result.models[0]?.description).toBe("First-party blurb");
+    expect(result.models[0]?.source_claims.find((c) => c.collector === "models-dev")?.field_paths).not.toContain(
+      "description"
+    );
   });
 
   it("gap-fills pricing and limits for QwenCloud from the models.dev `alibaba` provider", async () => {
