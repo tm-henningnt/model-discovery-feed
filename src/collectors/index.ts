@@ -7,6 +7,7 @@ import { openrouterCollector } from "./openrouter";
 import { opencodeGoCollector, opencodeZenCollector } from "./opencode";
 import { clineCollector, clinePassCollector } from "./cline";
 import { qwencloudCollector, qwencloudTokenPlanCollector } from "./qwencloud";
+import { veniceCollector } from "./venice";
 import type { Collector, CollectorContext, CollectorResult } from "./types";
 
 export const collectors: Collector[] = [
@@ -18,7 +19,8 @@ export const collectors: Collector[] = [
   clineCollector,
   clinePassCollector,
   qwencloudCollector,
-  qwencloudTokenPlanCollector
+  qwencloudTokenPlanCollector,
+  veniceCollector
 ];
 
 export type CollectorExecution = {

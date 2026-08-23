@@ -18,7 +18,8 @@ export type CollectorId =
   | "cline"
   | "cline-pass"
   | "qwencloud"
-  | "qwencloud-token-plan";
+  | "qwencloud-token-plan"
+  | "venice";
 
 export type CollectorNotice = Record<string, unknown>;
 

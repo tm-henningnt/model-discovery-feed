@@ -60,7 +60,8 @@ export const modelsDevProviderByProviderId: Record<string, string> = {
   // models.dev names the international QwenCloud platform `alibaba` and the subscription roster
   // `alibaba-token-plan`; both key on the same bare model ids QwenCloud publishes (ADR 0007).
   qwencloud: "alibaba",
-  "qwencloud-token-plan": "alibaba-token-plan"
+  "qwencloud-token-plan": "alibaba-token-plan",
+  venice: "venice"
 };
 
 /*
@@ -80,7 +81,11 @@ const capabilityGapFillAllowed: Record<string, boolean> = {
   // The QwenCloud CDN mapping carries no capability flags, and the Token Plan doc column is coarse
   // (it never mentions tool use), so absence there is a gap rather than a denial.
   qwencloud: true,
-  "qwencloud-token-plan": true
+  "qwencloud-token-plan": true,
+  // Venice's model_spec.capabilities enumerates function calling, response schema, reasoning, and
+  // vision on every text model, so absence there is a denial rather than a gap. Venice publishes no
+  // capability flags for its other model types, and models.dev lists only its text models.
+  venice: false
 };
 
 // Providers whose own API publishes no pricing at all — models.dev is the authoritative source (it is

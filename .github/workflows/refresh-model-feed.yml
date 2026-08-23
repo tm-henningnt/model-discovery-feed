@@ -24,6 +24,8 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
       CLINE_API_KEY: ${{ secrets.CLINE_API_KEY }}
+      # Optional: the Venice catalog endpoint is public, so an unset secret is not a failure.
+      VENICE_AI_API_KEY: ${{ secrets.VENICE_AI_API_KEY }}
 
     steps:
       - name: Check out repository

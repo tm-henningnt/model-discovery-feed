@@ -53,6 +53,7 @@ Example GitHub Actions secrets:
 - `GEMINI_API_KEY`
 - `OPENCODE_API_KEY`
 - `CLINE_API_KEY`
+- `VENICE_AI_API_KEY` (optional: the Venice catalog endpoint is public)
 
 The workflow runs:
 

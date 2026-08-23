@@ -49,6 +49,19 @@ offering records the editions that include it in `pricing.subscription.plan_edit
 _Avoid_: Coding Plan (a separate QwenCloud subscription this feed does not yet ingest), QwenCloud (that
 is the separate pay-as-you-go provider above)
 
+**Venice**:
+A privacy-first, uncensored provider as pay-as-you-go — per-token, per-character, per-second, or
+per-image billing over one catalog of nine model types. It runs its own id namespace that flattens
+the dots in a model name (`gemini-3-6-flash`), and it discloses a **privacy tier** per offering (see
+ADR 0017).
+_Avoid_: Venice AI, venice.ai (the provider id is `venice`)
+
+**Privacy tier**:
+Venice's statement of how much of a request it can read: `private` (zero data retention on a
+self-hosted model), `anonymized` (a third-party model with identifying metadata stripped), `tee`
+(hardware enclave), `e2ee` (encrypted client-side). Carried as a `privacy-*` policy tag, because the
+contract has no field for it.
+
 **Plan edition**:
 One price tier of a subscription provider, with its own roster (Token Plan Personal vs Team). An edition
 is a property of the sale, not a provider — the same model in both editions is one offering carrying two
