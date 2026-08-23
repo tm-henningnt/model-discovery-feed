@@ -1,26 +1,54 @@
 import { createHash } from "node:crypto";
 import type { NextRequest } from "next/server";
-import type { FeedDocument } from "@/feed/schema";
 
+/** How long a client may reuse a feed-derived response before it revalidates. */
+const FEED_CACHE_CONTROL = "private, max-age=300";
+
+/**
+ * Serialize a JSON body compactly. The `/v1` routes are a machine contract, and indentation is a
+ * third of the bytes on the largest of them: `/v1/models` serves 8.9 MB pretty-printed and 5.9 MB
+ * compact. A reader who wants it indented pipes the response through `jq`.
+ */
 export function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
+  return serializedJsonResponse(JSON.stringify(body), init);
+}
+
+/** `jsonResponse` for a body already serialized, so a caller never stringifies the same body twice. */
+export function serializedJsonResponse(serialized: string, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
   if (!headers.has("content-type")) {
     headers.set("content-type", "application/json; charset=utf-8");
   }
 
-  return new Response(JSON.stringify(body, null, 2), {
+  return new Response(serialized, {
     ...init,
     headers
   });
 }
 
-export function feedSnapshotHeaders(feed: FeedDocument): Headers {
-  const body = JSON.stringify(feed);
+/**
+ * A feed-derived JSON response that a client can revalidate instead of re-downloading.
+ *
+ * The ETag is the digest of the exact bytes served, so it identifies one filtered result rather than
+ * the whole release. Two callers asking `/v1/models` with different filters get different validators,
+ * and a caller repeating its own request gets a 304.
+ */
+export function cachedJsonResponse(
+  request: NextRequest,
+  body: unknown,
+  options: { generatedAt: string; cacheControl?: string }
+): Response {
+  const serialized = JSON.stringify(body);
   const headers = new Headers();
-  headers.set("ETag", makeEtag(body));
-  headers.set("Last-Modified", new Date(feed.feed.generated_at).toUTCString());
-  headers.set("Cache-Control", "private, max-age=300");
-  return headers;
+  headers.set("ETag", makeEtag(serialized));
+  headers.set("Cache-Control", options.cacheControl ?? FEED_CACHE_CONTROL);
+
+  const generatedAt = new Date(options.generatedAt);
+  if (!Number.isNaN(generatedAt.getTime())) {
+    headers.set("Last-Modified", generatedAt.toUTCString());
+  }
+
+  return maybeNotModified(request, headers) ?? serializedJsonResponse(serialized, { headers });
 }
 
 export function maybeNotModified(request: NextRequest, headers: Headers): Response | undefined {

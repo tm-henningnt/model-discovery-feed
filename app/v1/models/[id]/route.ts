@@ -1,14 +1,14 @@
 import type { NextRequest } from "next/server";
 import { feedStore } from "@/feed/store";
 import { requireFeedApiKey } from "@/server/auth";
-import { jsonResponse } from "@/server/http";
+import { cachedJsonResponse, jsonResponse } from "@/server/http";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
-  const authFailure = requireFeedApiKey(_request);
+export async function GET(request: NextRequest, context: RouteContext) {
+  const authFailure = requireFeedApiKey(request);
   if (authFailure) return authFailure;
 
   const { id } = await context.params;
@@ -17,8 +17,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const model = feed.models.find((candidate) => candidate.id === decodedId);
 
   if (!model) {
+    // A miss is not cached: the next release can add the id.
     return jsonResponse({ error: "model_not_found", id: decodedId }, { status: 404 });
   }
 
-  return jsonResponse(model);
+  return cachedJsonResponse(request, model, { generatedAt: feed.feed.generated_at });
 }
